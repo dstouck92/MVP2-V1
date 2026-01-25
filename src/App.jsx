@@ -1,0 +1,1078 @@
+import React, { useState, useEffect } from 'react';
+import { Search, Music, Users, Clock, Send, ChevronDown } from 'lucide-react';
+import './App.css';
+import { auth, users, listeningData, leaderboards, comments } from './lib/supabase';
+
+// ==================== CONSTANTS ====================
+const ANIMAL_AVATARS = ['🐐', '🐑', '🐴', '🦌', '🐮', '🐘', '🐕', '🐈'];
+
+// ==================== MAIN APP ====================
+export default function App() {
+  const [currentScreen, setCurrentScreen] = useState('welcome');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
+  const [userStats, setUserStats] = useState({ totalMinutes: 0, totalSongs: 0 });
+  const [topArtists, setTopArtists] = useState([]);
+  const [selectedAvatar, setSelectedAvatar] = useState('🦌');
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [timeFilter, setTimeFilter] = useState('all-time');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [commentSort, setCommentSort] = useState('recent');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  
+  // Form states
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [signupData, setSignupData] = useState({
+    username: '',
+    email: '',
+    phone: '',
+    password: ''
+  });
+  const [commentText, setCommentText] = useState('');
+  const [selectedArtist, setSelectedArtist] = useState(null);
+  const [leaderboardData, setLeaderboardData] = useState([]);
+  const [commentsData, setCommentsData] = useState([]);
+
+  // ==================== HELPER FUNCTIONS (defined first) ====================
+  const checkSession = async () => {
+    try {
+      const { data: session } = await auth.getSession();
+      if (session?.user) {
+        await loadUserData(session.user.id);
+      }
+    } catch (err) {
+      console.error('Error checking session:', err);
+    }
+  };
+
+  const handleSaveSpotifyTokens = async (accessToken, refreshToken, spotifyUserId) => {
+    if (!currentUser?.id) {
+      // If no user logged in, redirect to login
+      setCurrentScreen('login');
+      setError('Please log in to connect your Spotify account');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+      
+      // Save tokens via backend API
+      const response = await fetch(`${backendUrl}/api/auth/spotify/save-tokens`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          accessToken,
+          refreshToken,
+          spotifyUserId
+        })
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to save tokens');
+      }
+
+      // Update user profile in state
+      setUserProfile(prev => prev ? {
+        ...prev,
+        spotify_access_token: accessToken,
+        spotify_refresh_token: refreshToken,
+        spotify_user_id: spotifyUserId
+      } : null);
+
+      // Reload user data to get updated profile
+      await loadUserData(currentUser.id);
+      setCurrentScreen('profile');
+    } catch (err) {
+      console.error('Error saving Spotify tokens:', err);
+      setError(err.message || 'Failed to connect Spotify account');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==================== AUTH STATE MANAGEMENT ====================
+  useEffect(() => {
+    // Handle Spotify OAuth callback first (before checking session)
+    const urlParams = new URLSearchParams(window.location.search);
+    const accessToken = urlParams.get('access_token');
+    const refreshToken = urlParams.get('refresh_token');
+    const spotifyUserId = urlParams.get('spotify_user_id');
+    const error = urlParams.get('error');
+
+    if (error) {
+      setError(`Spotify connection failed: ${error}`);
+      setCurrentScreen('spotify-connect');
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+
+    if (accessToken && refreshToken) {
+      // We have tokens from OAuth callback
+      // First check if user is logged in, if not, redirect to login
+      checkSession().then(() => {
+        // Wait a moment for session to load
+        setTimeout(async () => {
+          const { data: session } = await auth.getSession();
+          if (session?.user) {
+            await handleSaveSpotifyTokens(accessToken, refreshToken, spotifyUserId);
+          } else {
+            // Store tokens temporarily and redirect to login
+            sessionStorage.setItem('spotify_tokens', JSON.stringify({
+              accessToken,
+              refreshToken,
+              spotifyUserId
+            }));
+            setError('Please log in to connect your Spotify account');
+            setCurrentScreen('login');
+          }
+          // Clean URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }, 500);
+      });
+      return;
+    }
+
+    // Check for existing session on mount
+    checkSession();
+    
+    // Listen for auth state changes
+    try {
+      if (auth.onAuthStateChange) {
+        const result = auth.onAuthStateChange((event, session) => {
+          if (event === 'SIGNED_IN' && session) {
+            loadUserData(session.user.id).then(() => {
+              // Check if we have stored Spotify tokens
+              const storedTokens = sessionStorage.getItem('spotify_tokens');
+              if (storedTokens) {
+                try {
+                  const tokens = JSON.parse(storedTokens);
+                  handleSaveSpotifyTokens(tokens.accessToken, tokens.refreshToken, tokens.spotifyUserId);
+                  sessionStorage.removeItem('spotify_tokens');
+                } catch (err) {
+                  console.error('Error parsing stored tokens:', err);
+                }
+              }
+            });
+          } else if (event === 'SIGNED_OUT') {
+            setCurrentUser(null);
+            setUserProfile(null);
+            setCurrentScreen('welcome');
+          }
+        });
+
+        if (result && !result.error && result.data && result.data.subscription) {
+          return () => {
+            if (result.data.subscription) {
+              result.data.subscription.unsubscribe();
+            }
+          };
+        }
+      }
+    } catch (err) {
+      console.error('Error setting up auth listener:', err);
+      // Don't block app from loading if auth listener fails
+    }
+  }, []);
+
+  // Load user data when time filter changes
+  useEffect(() => {
+    if (currentUser?.id && currentScreen === 'profile') {
+      loadUserStats();
+      loadTopArtists();
+    }
+  }, [timeFilter, currentUser, currentScreen]);
+
+  // ==================== HELPER FUNCTIONS ====================
+  const loadUserData = async (userId) => {
+    try {
+      setLoading(true);
+      const { data: profile, error } = await users.getProfile(userId);
+      if (error) throw error;
+      
+      if (profile) {
+        setUserProfile(profile);
+        setCurrentUser({
+          id: profile.id,
+          username: profile.username,
+          email: profile.email,
+          avatar: profile.avatar,
+          memberSince: new Date(profile.member_since).toLocaleDateString()
+        });
+        setSelectedAvatar(profile.avatar || '🦌');
+        setCurrentScreen('profile');
+      }
+    } catch (err) {
+      console.error('Error loading user data:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadUserStats = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const { data, error } = await listeningData.getUserStats(currentUser.id, timeFilter);
+      if (error) throw error;
+      if (data) {
+        setUserStats({
+          totalMinutes: data.totalMinutes || 0,
+          totalSongs: data.totalSongs || 0
+        });
+      }
+    } catch (err) {
+      console.error('Error loading stats:', err);
+    }
+  };
+
+  const loadTopArtists = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const { data, error } = await listeningData.getTopArtists(currentUser.id, timeFilter, 10);
+      if (error) throw error;
+      setTopArtists(data || []);
+    } catch (err) {
+      console.error('Error loading top artists:', err);
+    }
+  };
+
+  const handleLogin = async (e) => {
+    e?.preventDefault();
+    if (!loginEmail || !loginPassword) {
+      setError('Please enter email and password');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const { data, error } = await auth.signIn(loginEmail, loginPassword);
+      
+      if (error) {
+        // Provide more specific error messages
+        if (error.message?.includes('Invalid login credentials')) {
+          setError('Invalid email or password. Please try again or sign up for a new account.');
+        } else if (error.message?.includes('Email not confirmed')) {
+          setError('Please check your email and confirm your account before logging in.');
+        } else {
+          setError(error.message || 'Login failed. Please check your credentials.');
+        }
+        console.error('Login error:', error);
+        return;
+      }
+      
+      if (data?.user) {
+        await loadUserData(data.user.id);
+      }
+    } catch (err) {
+      console.error('Login exception:', err);
+      setError(err.message || 'Login failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignup = async (e) => {
+    e?.preventDefault();
+    if (!signupData.email || !signupData.password || !signupData.username) {
+      setError('Please fill in all required fields');
+      return;
+    }
+
+    if (signupData.password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      console.log('Attempting signup...');
+      const { data, error } = await auth.signUp(
+        signupData.email,
+        signupData.password,
+        {
+          username: signupData.username,
+          phone: signupData.phone,
+          avatar: selectedAvatar
+        }
+      );
+      
+      console.log('Signup response:', { data, error });
+      
+      if (error) {
+        // Provide more specific error messages
+        if (error.message?.includes('already registered') || error.message?.includes('already exists')) {
+          setError('This email is already registered. Please log in instead.');
+        } else if (error.message?.includes('Password')) {
+          setError('Password is too weak. Please use a stronger password.');
+        } else if (error.message?.includes('permission') || error.message?.includes('policy')) {
+          setError('Database permission error. Please check Supabase RLS policies.');
+          console.error('RLS Policy Error - Run fix-rls-policies.sql in Supabase');
+        } else {
+          setError(error.message || 'Signup failed. Please try again.');
+        }
+        console.error('Signup error details:', error);
+        return;
+      }
+      
+      if (data?.user) {
+        console.log('User created:', data.user.id);
+        // Check if email confirmation is required
+        if (data.user && !data.session) {
+          setError('Please check your email to confirm your account before logging in.');
+          setCurrentScreen('login');
+        } else {
+          // Success! Redirect to Spotify connect
+          console.log('Signup successful, redirecting...');
+          setCurrentScreen('spotify-connect');
+        }
+      } else {
+        setError('Signup completed but no user data returned. Please try logging in.');
+        setCurrentScreen('login');
+      }
+    } catch (err) {
+      console.error('Signup exception:', err);
+      setError(err.message || 'Signup failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAvatarChange = async (newAvatar) => {
+    if (!currentUser?.id) return;
+    
+    setSelectedAvatar(newAvatar);
+    setShowAvatarPicker(false);
+    
+    try {
+      await users.updateAvatar(currentUser.id, newAvatar);
+      setUserProfile(prev => prev ? { ...prev, avatar: newAvatar } : null);
+      setCurrentUser(prev => prev ? { ...prev, avatar: newAvatar } : null);
+    } catch (err) {
+      console.error('Error updating avatar:', err);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      setCurrentUser(null);
+      setUserProfile(null);
+      setCurrentScreen('welcome');
+    } catch (err) {
+      console.error('Error logging out:', err);
+    }
+  };
+
+  const handleCommentSubmit = async () => {
+    if (!commentText.trim() || !selectedArtist || !currentUser?.id) return;
+
+    try {
+      setLoading(true);
+      const { error } = await comments.addComment(
+        currentUser.id,
+        selectedArtist.id,
+        selectedArtist.name,
+        commentText
+      );
+      if (error) throw error;
+      
+      setCommentText('');
+      loadComments();
+    } catch (err) {
+      setError(err.message || 'Failed to post comment');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadLeaderboard = async (artistId) => {
+    if (!artistId) return;
+    try {
+      setLoading(true);
+      const { data, error } = await leaderboards.getArtistLeaderboard(artistId, timeFilter);
+      if (error) throw error;
+      setLeaderboardData(data || []);
+    } catch (err) {
+      console.error('Error loading leaderboard:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadComments = async () => {
+    if (!selectedArtist?.id) return;
+    try {
+      const { data, error } = await comments.getArtistComments(selectedArtist.id, commentSort);
+      if (error) throw error;
+      setCommentsData(data || []);
+    } catch (err) {
+      console.error('Error loading comments:', err);
+    }
+  };
+
+  // ==================== RENDER FUNCTIONS ====================
+  
+  const renderWelcomeScreen = () => (
+    <div className="welcome-screen">
+      <div className="welcome-content">
+        <div className="logo-hero">
+          <div className="logo-circle">
+            <span className="logo-goat">🐐</span>
+          </div>
+        </div>
+        
+        <h1 className="welcome-title">Prove you're the Goat</h1>
+        <p className="welcome-subtitle">Connect your favorite platforms to Get Herd</p>
+        
+        <button className="btn-primary" onClick={() => setCurrentScreen('login')}>
+          <Music size={20} />
+          Log in
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderLoginScreen = () => (
+    <div className="auth-screen">
+      <div className="auth-content">
+        <div className="logo-small">
+          <span className="logo-goat-small">🐐</span>
+        </div>
+        
+        <div className="auth-toggle">
+          <button 
+            className={currentScreen === 'login' ? 'active' : ''}
+            onClick={() => {
+              setCurrentScreen('login');
+              setError(null);
+            }}
+          >
+            Log In
+          </button>
+          <button 
+            className={currentScreen === 'signup' ? 'active' : ''}
+            onClick={() => {
+              setCurrentScreen('signup');
+              setError(null);
+            }}
+          >
+            Sign Up
+          </button>
+        </div>
+
+        {error && (
+          <div style={{ 
+            background: '#FEE2E2', 
+            color: '#DC2626', 
+            padding: '0.75rem', 
+            borderRadius: '8px', 
+            marginBottom: '1rem',
+            fontSize: '0.875rem'
+          }}>
+            {error}
+          </div>
+        )}
+
+        <form className="auth-form" onSubmit={handleLogin}>
+          <div className="form-group">
+            <label>Email Address</label>
+            <input 
+              type="email" 
+              placeholder="Enter your email"
+              value={loginEmail}
+              onChange={(e) => setLoginEmail(e.target.value)}
+              required
+            />
+          </div>
+          
+          <div className="form-group">
+            <label>Password</label>
+            <input 
+              type="password" 
+              placeholder="Enter your password"
+              value={loginPassword}
+              onChange={(e) => setLoginPassword(e.target.value)}
+              required
+            />
+          </div>
+
+          <button 
+            type="submit"
+            className="btn-primary full-width"
+            disabled={loading}
+          >
+            {loading ? 'Logging in...' : 'Log In'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+
+  const renderSignupScreen = () => (
+    <div className="auth-screen">
+      <div className="auth-content">
+        <div className="logo-small">
+          <span className="logo-goat-small">🐐</span>
+        </div>
+        
+        <div className="auth-toggle">
+          <button 
+            className={currentScreen === 'login' ? 'active' : ''}
+            onClick={() => {
+              setCurrentScreen('login');
+              setError(null);
+            }}
+          >
+            Log In
+          </button>
+          <button 
+            className={currentScreen === 'signup' ? 'active' : ''}
+            onClick={() => {
+              setCurrentScreen('signup');
+              setError(null);
+            }}
+          >
+            Sign Up
+          </button>
+        </div>
+
+        {error && (
+          <div style={{ 
+            background: '#FEE2E2', 
+            color: '#DC2626', 
+            padding: '0.75rem', 
+            borderRadius: '8px', 
+            marginBottom: '1rem',
+            fontSize: '0.875rem'
+          }}>
+            {error}
+          </div>
+        )}
+
+        <form className="auth-form" onSubmit={handleSignup}>
+          <div className="form-group">
+            <label>Username</label>
+            <input 
+              type="text" 
+              placeholder="Choose a username"
+              value={signupData.username}
+              onChange={(e) => setSignupData({...signupData, username: e.target.value})}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Email Address</label>
+            <input 
+              type="email" 
+              placeholder="Enter your email"
+              value={signupData.email}
+              onChange={(e) => setSignupData({...signupData, email: e.target.value})}
+              required
+            />
+          </div>
+          
+          <div className="form-group">
+            <label>Phone Number (Optional)</label>
+            <input 
+              type="tel" 
+              placeholder="Enter your phone number"
+              value={signupData.phone}
+              onChange={(e) => setSignupData({...signupData, phone: e.target.value})}
+            />
+          </div>
+          
+          <div className="form-group">
+            <label>Password</label>
+            <input 
+              type="password" 
+              placeholder="Create a password (min 6 characters)"
+              value={signupData.password}
+              onChange={(e) => setSignupData({...signupData, password: e.target.value})}
+              minLength={6}
+              required
+            />
+            <span className="form-hint">You can set a password now or later</span>
+          </div>
+
+          <div className="form-group">
+            <label>Choose Avatar</label>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {ANIMAL_AVATARS.map(emoji => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => setSelectedAvatar(emoji)}
+                  style={{
+                    fontSize: '2rem',
+                    background: selectedAvatar === emoji ? '#10B981' : '#F3F4F6',
+                    border: selectedAvatar === emoji ? '2px solid #059669' : '2px solid transparent',
+                    borderRadius: '8px',
+                    padding: '0.5rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button 
+            type="submit"
+            className="btn-primary full-width"
+            disabled={loading}
+          >
+            {loading ? 'Creating account...' : 'Create Account'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+
+  const renderSpotifyConnect = () => {
+    const handleSpotifyConnect = () => {
+      // Redirect to backend OAuth endpoint
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+      window.location.href = `${backendUrl}/api/auth/spotify`;
+    };
+
+    return (
+      <div className="spotify-connect-screen">
+        <div className="spotify-content">
+          <div className="logo-small">
+            <span className="logo-goat-small">🐐</span>
+          </div>
+          
+          <h2>Connect Your Spotify</h2>
+          <p className="spotify-subtitle">Sync your listening data to compete on leaderboards and track your music journey</p>
+          
+          <button className="btn-spotify" onClick={handleSpotifyConnect}>
+            <Music size={20} />
+            Connect Spotify Account
+          </button>
+          
+          <button className="btn-skip" onClick={() => setCurrentScreen('profile')}>
+            Skip for now
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderProfileScreen = () => (
+    <div className="main-app">
+      <header className="app-header">
+        <div className="header-left">
+          <div className="logo-header">
+            <span className="logo-goat-tiny">🐐</span>
+            <span className="logo-text">HERD</span>
+          </div>
+        </div>
+        <div className="header-right">
+          <div className="search-bar">
+            <Search size={18} />
+            <input 
+              type="text" 
+              placeholder="Search fans..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          {currentUser && (
+            <button 
+              onClick={handleLogout}
+              style={{
+                marginLeft: '1rem',
+                padding: '0.5rem 1rem',
+                background: '#EF4444',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '0.875rem'
+              }}
+            >
+              Logout
+            </button>
+          )}
+        </div>
+      </header>
+
+      <div className="app-body">
+        <div className="profile-header">
+          <div className="profile-card">
+            <div className="profile-avatar-container">
+              <div 
+                className="profile-avatar clickable"
+                onClick={() => setShowAvatarPicker(!showAvatarPicker)}
+              >
+                <span className="avatar-emoji">{selectedAvatar}</span>
+              </div>
+              <ChevronDown size={16} className="avatar-dropdown-icon" />
+              
+              {showAvatarPicker && (
+                <div className="avatar-picker">
+                  {ANIMAL_AVATARS.map(emoji => (
+                    <div 
+                      key={emoji}
+                      className={`avatar-option ${selectedAvatar === emoji ? 'selected' : ''}`}
+                      onClick={() => handleAvatarChange(emoji)}
+                    >
+                      {emoji}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div className="profile-info">
+              <h2 className="profile-name">{currentUser?.username || 'User'}</h2>
+              <p className="profile-since">Member since {currentUser?.memberSince || 'Recently'}</p>
+            </div>
+          </div>
+        </div>
+
+        {!userProfile?.spotify_access_token && (
+          <div className="spotify-banner">
+            <Music size={20} />
+            <span>Connect Spotify to see your listening stats</span>
+            <button className="btn-connect-small" onClick={() => setCurrentScreen('spotify-connect')}>Connect</button>
+          </div>
+        )}
+
+        <div className="stats-section">
+          <div className="time-filter">
+            <select 
+              value={timeFilter}
+              onChange={(e) => setTimeFilter(e.target.value)}
+            >
+              <option value="past-week">Past Week</option>
+              <option value="this-month">This Month</option>
+              <option value="all-time">All Time</option>
+            </select>
+          </div>
+
+          <div className="stats-cards">
+            <div className="stat-card">
+              <div className="stat-icon">
+                <Clock size={24} />
+              </div>
+              <div className="stat-content">
+                <div className="stat-label">Total Minutes</div>
+                <div className="stat-value">{userStats.totalMinutes.toLocaleString()}</div>
+                <div className="stat-sub">≈ {Math.round(userStats.totalMinutes / 60)} hours</div>
+              </div>
+            </div>
+
+            <div className="stat-card">
+              <div className="stat-icon">
+                <Music size={24} />
+              </div>
+              <div className="stat-content">
+                <div className="stat-label">Total Songs</div>
+                <div className="stat-value">{userStats.totalSongs.toLocaleString()}</div>
+                <div className="stat-sub">streams since joining</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="content-section">
+          <div className="section-header">
+            <h3>🏆 Top Artists</h3>
+          </div>
+          {loading ? (
+            <div className="empty-state">
+              <p>Loading...</p>
+            </div>
+          ) : topArtists.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {topArtists.map((artist, index) => (
+                <div key={artist.artistId} style={{
+                  padding: '1rem',
+                  background: '#F9FAFB',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 600 }}>#{index + 1} {artist.artistName}</div>
+                    <div style={{ fontSize: '0.875rem', color: '#6B7280' }}>
+                      {artist.totalMinutes} minutes • {artist.totalSongs} songs
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <Music size={48} />
+              <p>No listening data yet</p>
+              <span>Connect Spotify to see your top artists</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <nav className="bottom-nav">
+        <button 
+          className={currentScreen === 'profile' ? 'active' : ''}
+          onClick={() => setCurrentScreen('profile')}
+        >
+          <Users size={24} />
+          <span>Fans</span>
+        </button>
+        <button 
+          className={currentScreen === 'leaderboard' ? 'active' : ''}
+          onClick={() => setCurrentScreen('leaderboard')}
+        >
+          <Music size={24} />
+          <span>Artists</span>
+        </button>
+      </nav>
+    </div>
+  );
+
+  const renderLeaderboardScreen = () => (
+    <div className="main-app">
+      <header className="app-header">
+        <div className="header-left">
+          <div className="logo-header">
+            <span className="logo-goat-tiny">🐐</span>
+            <span className="logo-text">HERD</span>
+          </div>
+        </div>
+        <div className="header-right">
+          <div className="search-bar">
+            <Search size={18} />
+            <input 
+              type="text" 
+              placeholder="Search artists..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+      </header>
+
+      <div className="app-body">
+        <div className="artist-header">
+          <div className="artist-card">
+            <div className="artist-image-placeholder">
+              <Music size={48} />
+            </div>
+            <div className="artist-info">
+              <h2 className="artist-name">{selectedArtist?.name || 'Select an Artist'}</h2>
+              <p className="artist-label">Artist Leaderboard</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="stats-section">
+          <div className="time-filter">
+            <select 
+              value={timeFilter}
+              onChange={(e) => {
+                setTimeFilter(e.target.value);
+                if (selectedArtist) {
+                  loadLeaderboard(selectedArtist.id);
+                }
+              }}
+            >
+              <option value="past-week">Past Week</option>
+              <option value="this-month">This Month</option>
+              <option value="all-time">All Time</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="content-section">
+          <div className="section-header">
+            <h3>👑 Top Listeners</h3>
+          </div>
+          {loading ? (
+            <div className="empty-state">
+              <p>Loading...</p>
+            </div>
+          ) : leaderboardData.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {leaderboardData.map((entry) => (
+                <div key={entry.userId} style={{
+                  padding: '1rem',
+                  background: '#F9FAFB',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#10B981', minWidth: '3rem' }}>
+                      #{entry.rank}
+                    </div>
+                    <div style={{ fontSize: '2rem' }}>{entry.avatar}</div>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{entry.username}</div>
+                      <div style={{ fontSize: '0.875rem', color: '#6B7280' }}>
+                        {entry.totalMinutes} minutes • {entry.totalSongs} songs
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <Users size={48} />
+              <p>No data available</p>
+              <span>Search for an artist to see their top listeners</span>
+            </div>
+          )}
+        </div>
+
+        <div className="comments-section">
+          <h3 className="comments-title">Fan Comments</h3>
+          
+          <div className="comment-sort">
+            <select 
+              value={commentSort}
+              onChange={(e) => {
+                setCommentSort(e.target.value);
+                loadComments();
+              }}
+            >
+              <option value="recent">Most Recent</option>
+              <option value="liked">Most Liked</option>
+            </select>
+          </div>
+
+          {selectedArtist && (
+            <div className="comment-input">
+              <div className="comment-avatar">
+                <span>{selectedAvatar}</span>
+              </div>
+              <input 
+                type="text" 
+                placeholder="Share your thoughts..."
+                maxLength={200}
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleCommentSubmit();
+                  }
+                }}
+              />
+              <button 
+                className="btn-send"
+                onClick={handleCommentSubmit}
+                disabled={!commentText.trim() || loading}
+              >
+                <Send size={20} />
+              </button>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="empty-state small">
+              <p>Loading comments...</p>
+            </div>
+          ) : commentsData.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {commentsData.map((comment) => (
+                <div key={comment.id} style={{
+                  padding: '1rem',
+                  background: '#F9FAFB',
+                  borderRadius: '12px'
+                }}>
+                  <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                    <div style={{ fontSize: '1.5rem' }}>{comment.users?.avatar || '🦌'}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                        {comment.users?.username || 'Anonymous'}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#9CA3AF' }}>
+                        {new Date(comment.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ marginLeft: '2.5rem' }}>{comment.text}</div>
+                  {comment.likes && comment.likes.length > 0 && (
+                    <div style={{ marginLeft: '2.5rem', marginTop: '0.5rem', fontSize: '0.875rem', color: '#6B7280' }}>
+                      {comment.likes.length} like{comment.likes.length !== 1 ? 's' : ''}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state small">
+              <p>No comments yet</p>
+              <span>Be the first to share your thoughts</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <nav className="bottom-nav">
+        <button 
+          className={currentScreen === 'profile' ? 'active' : ''}
+          onClick={() => setCurrentScreen('profile')}
+        >
+          <Users size={24} />
+          <span>Fans</span>
+        </button>
+        <button 
+          className={currentScreen === 'leaderboard' ? 'active' : ''}
+          onClick={() => setCurrentScreen('leaderboard')}
+        >
+          <Music size={24} />
+          <span>Artists</span>
+        </button>
+      </nav>
+    </div>
+  );
+
+  // ==================== MAIN RENDER ====================
+  return (
+    <div className="herd-app">
+      {error && currentScreen !== 'login' && currentScreen !== 'signup' && (
+        <div style={{
+          position: 'fixed',
+          top: '1rem',
+          right: '1rem',
+          background: '#FEE2E2',
+          color: '#DC2626',
+          padding: '1rem 1.5rem',
+          borderRadius: '12px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          zIndex: 1000,
+          maxWidth: '400px',
+          cursor: 'pointer'
+        }} onClick={() => setError(null)}>
+          <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>Error</div>
+          <div style={{ fontSize: '0.875rem' }}>{error}</div>
+        </div>
+      )}
+      {currentScreen === 'welcome' && renderWelcomeScreen()}
+      {currentScreen === 'login' && renderLoginScreen()}
+      {currentScreen === 'signup' && renderSignupScreen()}
+      {currentScreen === 'spotify-connect' && renderSpotifyConnect()}
+      {currentScreen === 'profile' && renderProfileScreen()}
+      {currentScreen === 'leaderboard' && renderLeaderboardScreen()}
+    </div>
+  );
+}
