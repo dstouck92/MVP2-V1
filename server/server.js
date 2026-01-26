@@ -31,37 +31,62 @@ const supabase = createClient(
 
 // Step 1: Redirect to Spotify authorization
 app.get('/api/auth/spotify', (req, res) => {
-  const clientId = process.env.SPOTIFY_CLIENT_ID;
-  const redirectUri = process.env.SPOTIFY_REDIRECT_URI || `${process.env.FRONTEND_URL}/auth/spotify/callback`;
-  const scopes = [
-    'user-read-private',
-    'user-read-email',
-    'user-read-recently-played',
-    'user-top-read',
-    'user-read-playback-state'
-  ].join(' ');
+  try {
+    console.log('🔵 Spotify OAuth request received');
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+    const redirectUri = process.env.SPOTIFY_REDIRECT_URI || `${process.env.FRONTEND_URL}/auth/spotify/callback`;
+    
+    if (!clientId) {
+      console.error('❌ SPOTIFY_CLIENT_ID is missing');
+      return res.status(500).json({ error: 'Spotify Client ID not configured' });
+    }
+    
+    if (!redirectUri) {
+      console.error('❌ SPOTIFY_REDIRECT_URI is missing');
+      return res.status(500).json({ error: 'Redirect URI not configured' });
+    }
+    
+    console.log('📡 Redirect URI:', redirectUri);
+    
+    const scopes = [
+      'user-read-private',
+      'user-read-email',
+      'user-read-recently-played',
+      'user-top-read',
+      'user-read-playback-state'
+    ].join(' ');
 
-  const authUrl = `https://accounts.spotify.com/authorize?` +
-    `client_id=${clientId}&` +
-    `response_type=code&` +
-    `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-    `scope=${encodeURIComponent(scopes)}&` +
-    `show_dialog=true`;
+    const authUrl = `https://accounts.spotify.com/authorize?` +
+      `client_id=${clientId}&` +
+      `response_type=code&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+      `scope=${encodeURIComponent(scopes)}&` +
+      `show_dialog=true`;
 
-  res.redirect(authUrl);
+    console.log('🔗 Redirecting to Spotify:', authUrl.substring(0, 100) + '...');
+    res.redirect(authUrl);
+  } catch (error) {
+    console.error('❌ Error in /api/auth/spotify:', error);
+    res.status(500).json({ error: 'Failed to initiate Spotify OAuth' });
+  }
 });
 
 // Step 2: Handle OAuth callback and exchange code for tokens
 app.get('/api/auth/spotify/callback', async (req, res) => {
+  console.log('🟢 Spotify OAuth callback received');
   const { code, error } = req.query;
 
   if (error) {
+    console.error('❌ Spotify OAuth error:', error);
     return res.redirect(`${process.env.FRONTEND_URL}/spotify-connect?error=${error}`);
   }
 
   if (!code) {
+    console.error('❌ No authorization code received');
     return res.redirect(`${process.env.FRONTEND_URL}/spotify-connect?error=no_code`);
   }
+  
+  console.log('✅ Authorization code received, exchanging for tokens...');
 
   try {
     // Exchange authorization code for access token
@@ -99,10 +124,13 @@ app.get('/api/auth/spotify/callback', async (req, res) => {
       `refresh_token=${refresh_token}&` +
       `spotify_user_id=${spotifyUserId}`;
 
+    console.log('✅ Tokens received, redirecting to frontend...');
     res.redirect(redirectUrl);
   } catch (err) {
-    console.error('Spotify OAuth error:', err.response?.data || err.message);
-    res.redirect(`${process.env.FRONTEND_URL}/spotify-connect?error=token_exchange_failed`);
+    console.error('❌ Spotify OAuth error:', err.response?.data || err.message);
+    console.error('❌ Full error:', err);
+    const errorMessage = err.response?.data?.error || err.message || 'token_exchange_failed';
+    res.redirect(`${process.env.FRONTEND_URL}/spotify-connect?error=${encodeURIComponent(errorMessage)}`);
   }
 });
 
