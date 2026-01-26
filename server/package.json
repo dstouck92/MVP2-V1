@@ -4,9 +4,13 @@
   "type": "module",
   "description": "Backend server for Herd app - Spotify OAuth and API proxy",
   "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "dev": "node --watch server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "postinstall": "echo 'Installation complete'"
   },
   "dependencies": {
     "express": "^4.18.2",
