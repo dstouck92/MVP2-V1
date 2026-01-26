@@ -254,8 +254,9 @@ app.get('/api/health', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Herd backend server running on http://localhost:${PORT}`);
+// Bind to 0.0.0.0 to be accessible from outside the container (required for Railway, Render, etc.)
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Herd backend server running on port ${PORT}`);
   console.log(`📡 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
   console.log(`🎵 Spotify Client ID: ${process.env.SPOTIFY_CLIENT_ID ? '✅ Set' : '❌ Missing'}`);
   console.log(`🗄️  Supabase URL: ${process.env.SUPABASE_URL ? '✅ Set' : '❌ Missing'}`);
