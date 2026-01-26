@@ -111,13 +111,25 @@ app.get('/api/auth/spotify/callback', async (req, res) => {
     const { access_token, refresh_token, expires_in } = tokenResponse.data;
 
     // Get Spotify user info
-    const userResponse = await axios.get('https://api.spotify.com/v1/me', {
-      headers: {
-        'Authorization': `Bearer ${access_token}`
-      }
-    });
+    console.log('👤 Fetching Spotify user info...');
+    try {
+      const userResponse = await axios.get('https://api.spotify.com/v1/me', {
+        headers: {
+          'Authorization': `Bearer ${access_token}`
+        }
+      });
 
-    const spotifyUserId = userResponse.data.id;
+      spotifyUserId = userResponse.data.id;
+      console.log('✅ User info retrieved, Spotify User ID:', spotifyUserId);
+    } catch (userInfoError) {
+      console.error('❌ Failed to get Spotify user info');
+      console.error('Error:', userInfoError.response?.data || userInfoError.message);
+      console.error('Status:', userInfoError.response?.status);
+      // If we can't get user info (e.g., user not registered in Development Mode),
+      // we can still proceed with tokens - the user ID can be set later
+      console.log('⚠️ Proceeding without user ID - user may need to be added to Spotify app');
+      spotifyUserId = 'unknown';
+    }
 
     // Store tokens in session or pass to frontend
     // For now, we'll redirect with tokens in query (not secure for production!)
@@ -127,6 +139,7 @@ app.get('/api/auth/spotify/callback', async (req, res) => {
       `refresh_token=${refresh_token}&` +
       `spotify_user_id=${spotifyUserId}`;
 
+    console.log('✅ Redirecting to frontend with tokens');
     res.redirect(redirectUrl);
   } catch (err) {
     console.error('❌ Spotify OAuth token exchange failed');
