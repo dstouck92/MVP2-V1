@@ -84,12 +84,19 @@ app.get('/api/auth/spotify/callback', async (req, res) => {
   }
 
   try {
+    const redirectUri = process.env.SPOTIFY_REDIRECT_URI || `${process.env.FRONTEND_URL}/auth/spotify/callback`;
+    
+    console.log('🔄 Exchanging authorization code for tokens...');
+    console.log('📡 Redirect URI:', redirectUri);
+    console.log('🎵 Client ID:', process.env.SPOTIFY_CLIENT_ID ? '✅ Set' : '❌ Missing');
+    console.log('🔐 Client Secret:', process.env.SPOTIFY_CLIENT_SECRET ? '✅ Set' : '❌ Missing');
+    
     // Exchange authorization code for access token
     const tokenResponse = await axios.post('https://accounts.spotify.com/api/token', 
       new URLSearchParams({
         grant_type: 'authorization_code',
         code: code,
-        redirect_uri: process.env.SPOTIFY_REDIRECT_URI || `${process.env.FRONTEND_URL}/auth/spotify/callback`,
+        redirect_uri: redirectUri,
         client_id: process.env.SPOTIFY_CLIENT_ID,
         client_secret: process.env.SPOTIFY_CLIENT_SECRET
       }),
@@ -100,6 +107,7 @@ app.get('/api/auth/spotify/callback', async (req, res) => {
       }
     );
 
+    console.log('✅ Token exchange successful');
     const { access_token, refresh_token, expires_in } = tokenResponse.data;
 
     // Get Spotify user info
@@ -121,8 +129,19 @@ app.get('/api/auth/spotify/callback', async (req, res) => {
 
     res.redirect(redirectUrl);
   } catch (err) {
-    console.error('Spotify OAuth error:', err.response?.data || err.message);
-    res.redirect(`${process.env.FRONTEND_URL}/spotify-connect?error=token_exchange_failed`);
+    console.error('❌ Spotify OAuth token exchange failed');
+    console.error('Error details:', err.response?.data || err.message);
+    console.error('Status code:', err.response?.status);
+    console.error('Request redirect_uri:', process.env.SPOTIFY_REDIRECT_URI || `${process.env.FRONTEND_URL}/auth/spotify/callback`);
+    
+    // Get more specific error message
+    const errorMessage = err.response?.data?.error || err.message || 'token_exchange_failed';
+    const errorDescription = err.response?.data?.error_description || '';
+    
+    console.error('Spotify error:', errorMessage);
+    console.error('Error description:', errorDescription);
+    
+    res.redirect(`${process.env.FRONTEND_URL}/spotify-connect?error=${encodeURIComponent(errorMessage)}`);
   }
 });
 
