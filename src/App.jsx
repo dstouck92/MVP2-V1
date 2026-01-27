@@ -8,6 +8,9 @@ const ANIMAL_AVATARS = ['🐐', '🐑', '🐴', '🦌', '🐮', '🐘', '🐕', 
 
 // ==================== MAIN APP ====================
 export default function App() {
+  // Log immediately when component loads
+  console.log('%c🚀 HERD APP LOADING', 'background: #3b82f6; color: white; font-size: 14px; padding: 8px; font-weight: bold;');
+  
   const [currentScreen, setCurrentScreen] = useState('welcome');
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
