@@ -103,11 +103,16 @@ export default function App() {
         spotify_user_id: spotifyUserId
       } : null);
 
-      // Reload user data to get updated profile
+      // Reload user data to get updated profile (this will also set screen to profile)
       await loadUserData(userId);
-      // Ensure we're on profile screen
+      // Explicitly ensure we're on profile screen
       setCurrentScreen('profile');
       console.log('✅ Spotify connected successfully, showing profile screen');
+      
+      // Clean up URL if we're on /auth/spotify/success
+      if (window.location.pathname.includes('/auth/spotify/success')) {
+        window.history.replaceState({}, document.title, '/');
+      }
     } catch (err) {
       console.error('Error saving Spotify tokens:', err);
       setError(err.message || 'Failed to connect Spotify account');
@@ -143,13 +148,15 @@ export default function App() {
       console.log('✅ Spotify tokens received, processing...');
       // We have tokens from OAuth callback
       // First check if user is logged in, if not, redirect to login
-      checkSession().then(async () => {
-        // Wait a moment for session to load
-        await new Promise(resolve => setTimeout(resolve, 500));
+      // Try multiple times to get session (sometimes it takes a moment to restore)
+      let sessionFound = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
         const { data: session } = await auth.getSession();
-        console.log('📋 Session check:', session?.user ? 'User logged in' : 'No user');
+        console.log(`📋 Session check attempt ${attempt + 1}:`, session?.user ? 'User logged in' : 'No user');
         
         if (session?.user) {
+          sessionFound = true;
           console.log('👤 User ID:', session.user.id);
           // Ensure user data is loaded before saving tokens
           await loadUserData(session.user.id);
@@ -157,21 +164,27 @@ export default function App() {
           await new Promise(resolve => setTimeout(resolve, 500));
           console.log('💾 Saving Spotify tokens...');
           await handleSaveSpotifyTokens(accessToken, refreshToken, spotifyUserId);
-          console.log('✅ Spotify tokens saved, should be on profile screen');
-        } else {
-          console.log('⚠️ No session found, storing tokens for later');
-          // Store tokens temporarily and redirect to login
-          sessionStorage.setItem('spotify_tokens', JSON.stringify({
-            accessToken,
-            refreshToken,
-            spotifyUserId
-          }));
-          setError('Please log in to connect your Spotify account');
-          setCurrentScreen('login');
+          console.log('✅ Spotify tokens saved, redirecting to profile');
+          // Clean URL and ensure we're on profile screen
+          window.history.replaceState({}, document.title, '/');
+          setCurrentScreen('profile');
+          return;
         }
+      }
+      
+      if (!sessionFound) {
+        console.log('⚠️ No session found after multiple attempts, storing tokens for later');
+        // Store tokens temporarily and redirect to login
+        sessionStorage.setItem('spotify_tokens', JSON.stringify({
+          accessToken,
+          refreshToken,
+          spotifyUserId
+        }));
+        setError('Please log in to connect your Spotify account');
+        setCurrentScreen('login');
         // Clean URL
-        window.history.replaceState({}, document.title, window.location.pathname);
-      });
+        window.history.replaceState({}, document.title, '/');
+      }
       return;
     }
 
