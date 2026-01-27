@@ -40,10 +40,16 @@ export default function App() {
     try {
       const { data: session } = await auth.getSession();
       if (session?.user) {
+        console.log('✅ Session found, user ID:', session.user.id);
         await loadUserData(session.user.id);
+        return true;
+      } else {
+        console.log('⚠️ No active session');
+        return false;
       }
     } catch (err) {
       console.error('Error checking session:', err);
+      return false;
     }
   };
 
@@ -99,7 +105,9 @@ export default function App() {
 
       // Reload user data to get updated profile
       await loadUserData(userId);
+      // Ensure we're on profile screen
       setCurrentScreen('profile');
+      console.log('✅ Spotify connected successfully, showing profile screen');
     } catch (err) {
       console.error('Error saving Spotify tokens:', err);
       setError(err.message || 'Failed to connect Spotify account');
@@ -117,7 +125,13 @@ export default function App() {
     const spotifyUserId = urlParams.get('spotify_user_id');
     const error = urlParams.get('error');
 
+    console.log('🔍 Checking for Spotify OAuth callback...');
+    console.log('URL:', window.location.href);
+    console.log('Has access_token:', !!accessToken);
+    console.log('Has refresh_token:', !!refreshToken);
+
     if (error) {
+      console.error('❌ Spotify OAuth error:', error);
       setError(`Spotify connection failed: ${error}`);
       setCurrentScreen('spotify-connect');
       // Clean URL
@@ -126,19 +140,26 @@ export default function App() {
     }
 
     if (accessToken && refreshToken) {
+      console.log('✅ Spotify tokens received, processing...');
       // We have tokens from OAuth callback
       // First check if user is logged in, if not, redirect to login
       checkSession().then(async () => {
         // Wait a moment for session to load
         await new Promise(resolve => setTimeout(resolve, 500));
         const { data: session } = await auth.getSession();
+        console.log('📋 Session check:', session?.user ? 'User logged in' : 'No user');
+        
         if (session?.user) {
+          console.log('👤 User ID:', session.user.id);
           // Ensure user data is loaded before saving tokens
           await loadUserData(session.user.id);
           // Wait a bit more for currentUser state to update
-          await new Promise(resolve => setTimeout(resolve, 300));
+          await new Promise(resolve => setTimeout(resolve, 500));
+          console.log('💾 Saving Spotify tokens...');
           await handleSaveSpotifyTokens(accessToken, refreshToken, spotifyUserId);
+          console.log('✅ Spotify tokens saved, should be on profile screen');
         } else {
+          console.log('⚠️ No session found, storing tokens for later');
           // Store tokens temporarily and redirect to login
           sessionStorage.setItem('spotify_tokens', JSON.stringify({
             accessToken,
@@ -208,10 +229,12 @@ export default function App() {
   const loadUserData = async (userId) => {
     try {
       setLoading(true);
+      console.log('📥 Loading user data for:', userId);
       const { data: profile, error } = await users.getProfile(userId);
       if (error) throw error;
       
       if (profile) {
+        console.log('✅ User profile loaded:', profile.username);
         setUserProfile(profile);
         setCurrentUser({
           id: profile.id,
@@ -221,7 +244,13 @@ export default function App() {
           memberSince: new Date(profile.member_since).toLocaleDateString()
         });
         setSelectedAvatar(profile.avatar || '🦌');
-        setCurrentScreen('profile');
+        // Only set screen to profile if we're not already on a specific screen
+        // (don't override if we're on login/signup)
+        if (currentScreen !== 'login' && currentScreen !== 'signup' && currentScreen !== 'welcome') {
+          setCurrentScreen('profile');
+        } else if (currentScreen === 'welcome') {
+          setCurrentScreen('profile');
+        }
       }
     } catch (err) {
       console.error('Error loading user data:', err);
