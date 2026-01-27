@@ -123,6 +123,10 @@ export default function App() {
 
   // ==================== AUTH STATE MANAGEMENT ====================
   useEffect(() => {
+    // VERY VISIBLE LOG - This should appear in browser console
+    console.log('%c🔍 SPOTIFY OAUTH CALLBACK HANDLER RUNNING', 'background: #222; color: #bada55; font-size: 16px; padding: 10px;');
+    console.log('==========================================');
+    
     // Handle Spotify OAuth callback first (before checking session)
     // Check both pathname and query params for OAuth callback
     const isOAuthCallback = window.location.pathname.includes('/auth/spotify/success') || 
@@ -135,13 +139,13 @@ export default function App() {
     const error = urlParams.get('error');
 
     console.log('🔍 Checking for Spotify OAuth callback...');
-    console.log('Full URL:', window.location.href);
-    console.log('Pathname:', window.location.pathname);
-    console.log('Is OAuth callback path:', isOAuthCallback);
-    console.log('Search params:', window.location.search);
-    console.log('Has access_token:', !!accessToken);
-    console.log('Has refresh_token:', !!refreshToken);
-    console.log('Access token value:', accessToken ? accessToken.substring(0, 20) + '...' : 'null');
+    console.log('📍 Full URL:', window.location.href);
+    console.log('📍 Pathname:', window.location.pathname);
+    console.log('📍 Is OAuth callback path:', isOAuthCallback);
+    console.log('📍 Search params:', window.location.search);
+    console.log('📍 Has access_token:', !!accessToken);
+    console.log('📍 Has refresh_token:', !!refreshToken);
+    console.log('📍 Access token value:', accessToken ? accessToken.substring(0, 20) + '...' : 'null');
 
     if (error) {
       console.error('❌ Spotify OAuth error:', error);
@@ -153,6 +157,7 @@ export default function App() {
     }
 
     if (accessToken && refreshToken) {
+      console.log('%c✅ SPOTIFY TOKENS RECEIVED!', 'background: #10b981; color: white; font-size: 14px; padding: 8px; font-weight: bold;');
       console.log('✅ Spotify tokens received, processing...');
       // We have tokens from OAuth callback
       // First check if user is logged in, if not, redirect to login
