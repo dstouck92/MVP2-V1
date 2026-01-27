@@ -48,7 +48,15 @@ export default function App() {
   };
 
   const handleSaveSpotifyTokens = async (accessToken, refreshToken, spotifyUserId) => {
-    if (!currentUser?.id) {
+    // Get user ID from currentUser or session
+    let userId = currentUser?.id;
+    if (!userId) {
+      // Try to get from session if currentUser not set yet
+      const { data: session } = await auth.getSession();
+      userId = session?.user?.id;
+    }
+
+    if (!userId) {
       // If no user logged in, redirect to login
       setCurrentScreen('login');
       setError('Please log in to connect your Spotify account');
@@ -59,6 +67,8 @@ export default function App() {
       setLoading(true);
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
       
+      console.log('💾 Saving Spotify tokens for user:', userId);
+      
       // Save tokens via backend API
       const response = await fetch(`${backendUrl}/api/auth/spotify/save-tokens`, {
         method: 'POST',
@@ -66,7 +76,7 @@ export default function App() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          userId: currentUser.id,
+          userId: userId,
           accessToken,
           refreshToken,
           spotifyUserId
@@ -88,7 +98,7 @@ export default function App() {
       } : null);
 
       // Reload user data to get updated profile
-      await loadUserData(currentUser.id);
+      await loadUserData(userId);
       setCurrentScreen('profile');
     } catch (err) {
       console.error('Error saving Spotify tokens:', err);
@@ -118,25 +128,28 @@ export default function App() {
     if (accessToken && refreshToken) {
       // We have tokens from OAuth callback
       // First check if user is logged in, if not, redirect to login
-      checkSession().then(() => {
+      checkSession().then(async () => {
         // Wait a moment for session to load
-        setTimeout(async () => {
-          const { data: session } = await auth.getSession();
-          if (session?.user) {
-            await handleSaveSpotifyTokens(accessToken, refreshToken, spotifyUserId);
-          } else {
-            // Store tokens temporarily and redirect to login
-            sessionStorage.setItem('spotify_tokens', JSON.stringify({
-              accessToken,
-              refreshToken,
-              spotifyUserId
-            }));
-            setError('Please log in to connect your Spotify account');
-            setCurrentScreen('login');
-          }
-          // Clean URL
-          window.history.replaceState({}, document.title, window.location.pathname);
-        }, 500);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const { data: session } = await auth.getSession();
+        if (session?.user) {
+          // Ensure user data is loaded before saving tokens
+          await loadUserData(session.user.id);
+          // Wait a bit more for currentUser state to update
+          await new Promise(resolve => setTimeout(resolve, 300));
+          await handleSaveSpotifyTokens(accessToken, refreshToken, spotifyUserId);
+        } else {
+          // Store tokens temporarily and redirect to login
+          sessionStorage.setItem('spotify_tokens', JSON.stringify({
+            accessToken,
+            refreshToken,
+            spotifyUserId
+          }));
+          setError('Please log in to connect your Spotify account');
+          setCurrentScreen('login');
+        }
+        // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
       });
       return;
     }
