@@ -112,6 +112,7 @@ app.get('/api/auth/spotify/callback', async (req, res) => {
 
     // Get Spotify user info
     console.log('👤 Fetching Spotify user info...');
+    let spotifyUserId = 'unknown'; // Initialize with default value
     try {
       const userResponse = await axios.get('https://api.spotify.com/v1/me', {
         headers: {
