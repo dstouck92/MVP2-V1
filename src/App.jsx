@@ -162,25 +162,50 @@ export default function App() {
     if (accessToken && refreshToken) {
       console.log('%c✅ SPOTIFY TOKENS RECEIVED!', 'background: #10b981; color: white; font-size: 14px; padding: 8px; font-weight: bold;');
       console.log('✅ Spotify tokens received, processing...');
+      
+      // Check localStorage directly for Supabase session
+      console.log('🔍 Checking localStorage for Supabase session...');
+      const supabaseSessionKey = Object.keys(localStorage).find(key => key.includes('supabase.auth.token'));
+      console.log('📦 Supabase session key found:', !!supabaseSessionKey);
+      if (supabaseSessionKey) {
+        try {
+          const sessionData = JSON.parse(localStorage.getItem(supabaseSessionKey));
+          console.log('📦 Session data in localStorage:', sessionData ? 'Found' : 'Not found');
+          if (sessionData?.currentSession?.user) {
+            console.log('✅ Found user in localStorage:', sessionData.currentSession.user.id);
+          }
+        } catch (e) {
+          console.error('❌ Error parsing localStorage session:', e);
+        }
+      }
+      
       // We have tokens from OAuth callback
       // First check if user is logged in, if not, redirect to login
       // Try multiple times to get session (sometimes it takes a moment to restore)
       let sessionFound = false;
       let sessionUser = null;
       
-      for (let attempt = 0; attempt < 5; attempt++) {
-        await new Promise(resolve => setTimeout(resolve, 400 * (attempt + 1)));
-        const { data: session, error } = await auth.getSession();
-        console.log(`📋 Session check attempt ${attempt + 1}:`, session?.user ? `User logged in (${session.user.id})` : 'No user');
-        if (error) {
-          console.error('❌ Session error:', error);
-        }
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const delay = attempt === 0 ? 100 : 300 * (attempt + 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
         
-        if (session?.user) {
-          sessionFound = true;
-          sessionUser = session.user;
-          console.log('👤 User ID:', session.user.id);
-          break; // Exit loop once we have a session
+        try {
+          const { data: session, error } = await auth.getSession();
+          console.log(`📋 Session check attempt ${attempt + 1}/${8}:`, session?.user ? `✅ User logged in (${session.user.id})` : '❌ No user');
+          if (error) {
+            console.error('❌ Session error:', error);
+            console.error('Error details:', JSON.stringify(error, null, 2));
+          }
+          
+          if (session?.user) {
+            sessionFound = true;
+            sessionUser = session.user;
+            console.log('👤 User ID confirmed:', session.user.id);
+            console.log('📧 User email:', session.user.email);
+            break; // Exit loop once we have a session
+          }
+        } catch (err) {
+          console.error(`❌ Exception on attempt ${attempt + 1}:`, err);
         }
       }
       
@@ -200,15 +225,27 @@ export default function App() {
       }
       
       // No session found after multiple attempts
-      console.log('⚠️ No session found after multiple attempts, storing tokens for later');
-      console.log('💡 User needs to log in first, then tokens will be applied');
+      console.error('❌❌❌ CRITICAL: No session found after 8 attempts!');
+      console.error('This means the user session was lost during OAuth redirect.');
+      console.error('Possible causes:');
+      console.error('1. Session expired during redirect');
+      console.error('2. Domain mismatch (localhost vs production)');
+      console.error('3. Browser cleared localStorage');
+      console.error('4. Supabase session not persisting across redirects');
+      
+      // Check if we can find any user info in localStorage
+      const allKeys = Object.keys(localStorage);
+      const supabaseKeys = allKeys.filter(k => k.includes('supabase'));
+      console.log('📦 All Supabase keys in localStorage:', supabaseKeys);
+      
+      console.log('⚠️ Storing tokens for later and redirecting to login');
       // Store tokens temporarily and redirect to login
       sessionStorage.setItem('spotify_tokens', JSON.stringify({
         accessToken,
         refreshToken,
         spotifyUserId
       }));
-      setError('Please log in to connect your Spotify account');
+      setError('Your session expired. Please log in again to connect your Spotify account.');
       setCurrentScreen('login');
       // Clean URL
       window.history.replaceState({}, document.title, '/');
