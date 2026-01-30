@@ -37,6 +37,8 @@ export default function App() {
   const [selectedArtist, setSelectedArtist] = useState(null);
   const [leaderboardData, setLeaderboardData] = useState([]);
   const [commentsData, setCommentsData] = useState([]);
+  const [artistSearchResults, setArtistSearchResults] = useState([]);
+  const [showArtistSearchResults, setShowArtistSearchResults] = useState(false);
 
   // ==================== HELPER FUNCTIONS (defined first) ====================
   const checkSession = async () => {
@@ -582,18 +584,48 @@ export default function App() {
     }
   };
 
-  const loadLeaderboard = async (artistId) => {
+  const loadLeaderboard = async (artistId, artistName = null) => {
     if (!artistId) return;
     try {
       setLoading(true);
-      const { data, error } = await leaderboards.getArtistLeaderboard(artistId, timeFilter);
+      const { data, error } = await leaderboards.getArtistLeaderboard(artistId, timeFilter, 10);
       if (error) throw error;
       setLeaderboardData(data || []);
+      // Update selected artist if name provided
+      if (artistName) {
+        setSelectedArtist({ id: artistId, name: artistName });
+      }
     } catch (err) {
       console.error('Error loading leaderboard:', err);
+      setError('Failed to load leaderboard');
     } finally {
       setLoading(false);
     }
+  };
+
+  const searchArtists = async (query) => {
+    if (!query || query.trim().length < 2) {
+      setArtistSearchResults([]);
+      setShowArtistSearchResults(false);
+      return;
+    }
+    
+    try {
+      const { data, error } = await leaderboards.searchArtists(query.trim(), 20);
+      if (error) throw error;
+      setArtistSearchResults(data || []);
+      setShowArtistSearchResults(true);
+    } catch (err) {
+      console.error('Error searching artists:', err);
+      setArtistSearchResults([]);
+    }
+  };
+
+  const handleArtistSelect = (artist) => {
+    setSelectedArtist(artist);
+    setSearchQuery(artist.name);
+    setShowArtistSearchResults(false);
+    loadLeaderboard(artist.id, artist.name);
   };
 
   const loadComments = async () => {
@@ -1076,20 +1108,42 @@ export default function App() {
           ) : topArtists.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {topArtists.map((artist, index) => (
-                <div key={artist.artistId} style={{
-                  padding: '1rem',
-                  background: '#F9FAFB',
-                  borderRadius: '12px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}>
+                <div 
+                  key={artist.artistId} 
+                  onClick={() => {
+                    setCurrentScreen('leaderboard');
+                    handleArtistSelect({ id: artist.artistId, name: artist.artistName });
+                  }}
+                  style={{
+                    padding: '1rem',
+                    background: '#F9FAFB',
+                    borderRadius: '12px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    ':hover': {
+                      background: '#F3F4F6',
+                      transform: 'translateY(-2px)'
+                    }
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#F3F4F6';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#F9FAFB';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }}
+                >
                   <div>
-                    <div style={{ fontWeight: 600 }}>#{index + 1} {artist.artistName}</div>
+                    <div style={{ fontWeight: 600, color: '#1F2937' }}>#{index + 1} {artist.artistName}</div>
                     <div style={{ fontSize: '0.875rem', color: '#6B7280' }}>
                       {artist.totalMinutes} minutes • {artist.totalSongs} songs
                     </div>
                   </div>
+                  <div style={{ color: '#10B981', fontSize: '1.2rem' }}>→</div>
                 </div>
               ))}
             </div>
@@ -1132,14 +1186,59 @@ export default function App() {
           </div>
         </div>
         <div className="header-right">
-          <div className="search-bar">
+          <div className="search-bar" style={{ position: 'relative', width: '100%' }}>
             <Search size={18} />
             <input 
               type="text" 
               placeholder="Search artists..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                searchArtists(e.target.value);
+              }}
+              onFocus={() => {
+                if (artistSearchResults.length > 0) {
+                  setShowArtistSearchResults(true);
+                }
+              }}
+              onBlur={() => {
+                // Delay hiding to allow click on results
+                setTimeout(() => setShowArtistSearchResults(false), 200);
+              }}
             />
+            {showArtistSearchResults && artistSearchResults.length > 0 && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                background: 'white',
+                border: '1px solid #E5E7EB',
+                borderRadius: '8px',
+                marginTop: '4px',
+                maxHeight: '300px',
+                overflowY: 'auto',
+                zIndex: 1000,
+                boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+              }}>
+                {artistSearchResults.map((artist) => (
+                  <div
+                    key={artist.id}
+                    onClick={() => handleArtistSelect(artist)}
+                    style={{
+                      padding: '12px 16px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid #F3F4F6',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#F9FAFB'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                  >
+                    <div style={{ fontWeight: 500, color: '#1F2937' }}>{artist.name}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -1164,13 +1263,13 @@ export default function App() {
               onChange={(e) => {
                 setTimeFilter(e.target.value);
                 if (selectedArtist) {
-                  loadLeaderboard(selectedArtist.id);
+                  loadLeaderboard(selectedArtist.id, selectedArtist.name);
                 }
               }}
             >
-              <option value="past-week">Past Week</option>
-              <option value="this-month">This Month</option>
               <option value="all-time">All Time</option>
+              <option value="this-month">Past Month</option>
+              <option value="past-week">Past Week</option>
             </select>
           </div>
         </div>

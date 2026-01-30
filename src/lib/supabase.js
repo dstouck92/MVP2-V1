@@ -313,8 +313,36 @@ export const listeningData = {
 
 // ==================== LEADERBOARDS ====================
 export const leaderboards = {
+  // Search for artists by name
+  searchArtists: async (query, limit = 20) => {
+    if (!supabase) return { error: 'Supabase not configured' };
+    if (!query || query.trim().length === 0) return { data: [], error: null };
+    
+    const { data, error } = await supabase
+      .from('listening_data')
+      .select('artist_id, artist_name')
+      .ilike('artist_name', `%${query.trim()}%`)
+      .order('artist_name', { ascending: true })
+      .limit(limit);
+    
+    if (error) return { data: null, error };
+    
+    // Get unique artists
+    const artistMap = {};
+    data.forEach(event => {
+      if (!artistMap[event.artist_id]) {
+        artistMap[event.artist_id] = {
+          id: event.artist_id,
+          name: event.artist_name
+        };
+      }
+    });
+    
+    return { data: Object.values(artistMap), error: null };
+  },
+
   // Get top listeners for an artist
-  getArtistLeaderboard: async (artistId, timeRange = 'all-time', limit = 50) => {
+  getArtistLeaderboard: async (artistId, timeRange = 'all-time', limit = 10) => {
     if (!supabase) return { error: 'Supabase not configured' };
     
     let query = supabase
