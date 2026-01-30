@@ -121,6 +121,34 @@ export default function App() {
       setCurrentScreen('profile');
       console.log('✅ Spotify connected successfully, showing profile screen');
       
+      // Automatically sync Spotify data after connecting
+      console.log('🔄 Starting automatic Spotify data sync...');
+      try {
+        const syncResponse = await fetch(`${backendUrl}/api/spotify/sync-listening-data`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: userId,
+            accessToken: accessToken
+          })
+        });
+        
+        const syncResult = await syncResponse.json();
+        if (syncResponse.ok) {
+          console.log('✅ Spotify data synced successfully:', syncResult);
+          // Reload stats and top artists after sync
+          await loadUserStats();
+          await loadTopArtists();
+        } else {
+          console.warn('⚠️ Sync completed but may have issues:', syncResult);
+        }
+      } catch (syncErr) {
+        console.error('❌ Error syncing Spotify data:', syncErr);
+        // Don't fail the whole flow if sync fails - user can sync manually later
+      }
+      
       // Clean up URL if we're on /auth/spotify/success
       if (window.location.pathname.includes('/auth/spotify/success')) {
         window.history.replaceState({}, document.title, '/');
@@ -952,6 +980,51 @@ export default function App() {
             <Music size={20} />
             <span>Connect Spotify to see your listening stats</span>
             <button className="btn-connect-small" onClick={() => setCurrentScreen('spotify-connect')}>Connect</button>
+          </div>
+        )}
+
+        {userProfile?.spotify_access_token && (
+          <div className="spotify-banner" style={{ background: '#10B981', color: 'white' }}>
+            <Music size={20} />
+            <span>Spotify Connected</span>
+            <button 
+              className="btn-connect-small" 
+              onClick={async () => {
+                if (!currentUser?.id || !userProfile?.spotify_access_token) return;
+                setLoading(true);
+                try {
+                  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+                  const syncResponse = await fetch(`${backendUrl}/api/spotify/sync-listening-data`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      userId: currentUser.id,
+                      accessToken: userProfile.spotify_access_token
+                    })
+                  });
+                  const syncResult = await syncResponse.json();
+                  if (syncResponse.ok) {
+                    console.log('✅ Data synced:', syncResult);
+                    await loadUserStats();
+                    await loadTopArtists();
+                    setError(null);
+                  } else {
+                    throw new Error(syncResult.error || 'Sync failed');
+                  }
+                } catch (err) {
+                  console.error('Sync error:', err);
+                  setError(err.message || 'Failed to sync data');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              style={{ background: 'white', color: '#10B981' }}
+            >
+              {loading ? 'Syncing...' : 'Sync Data'}
+            </button>
           </div>
         )}
 
