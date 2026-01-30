@@ -13,6 +13,20 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // This runs BEFORE React loads - if you see this, the page is loading
+      console.log('%c📄 HTML PAGE LOADED', 'background: #f59e0b; color: white; font-size: 16px; padding: 10px; font-weight: bold;');
+      console.log('Timestamp:', new Date().toISOString());
+      console.log('Current URL:', window.location.href);
+      
+      // Catch any errors during script loading
+      window.addEventListener('error', function(e) {
+        console.error('%c❌ JAVASCRIPT ERROR DETECTED', 'background: #dc2626; color: white; font-size: 14px; padding: 8px; font-weight: bold;');
+        console.error('Error:', e.message);
+        console.error('File:', e.filename);
+        console.error('Line:', e.lineno);
+      });
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
