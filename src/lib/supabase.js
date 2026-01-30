@@ -1,6 +1,10 @@
 // Supabase client configuration
 // This file contains all Supabase database operations for the Herd app
 
+// THIS LOG RUNS WHEN MODULE IS IMPORTED
+console.log('%c📦 SUPABASE.JS MODULE LOADING', 'background: #10b981; color: white; font-size: 14px; padding: 8px; font-weight: bold;');
+console.log('Commit: a6072e3');
+
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
