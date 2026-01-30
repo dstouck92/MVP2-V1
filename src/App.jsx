@@ -56,13 +56,22 @@ export default function App() {
     }
   };
 
-  const handleSaveSpotifyTokens = async (accessToken, refreshToken, spotifyUserId) => {
-    // Get user ID from currentUser or session
-    let userId = currentUser?.id;
+  const handleSaveSpotifyTokens = async (accessToken, refreshToken, spotifyUserId, providedUserId = null) => {
+    // Get user ID from parameter, currentUser, or session
+    let userId = providedUserId || currentUser?.id;
     if (!userId) {
       // Try to get from session if currentUser not set yet
       const { data: session } = await auth.getSession();
       userId = session?.user?.id;
+    }
+    
+    // Last resort: check sessionStorage for stored user ID
+    if (!userId) {
+      const storedUserId = sessionStorage.getItem('spotify_connect_user_id');
+      if (storedUserId) {
+        console.log('💡 Using stored user ID from sessionStorage:', storedUserId);
+        userId = storedUserId;
+      }
     }
 
     if (!userId) {
@@ -226,32 +235,54 @@ export default function App() {
           return;
         }
         
-        // No session found after multiple attempts
-        console.error('❌❌❌ CRITICAL: No session found after 8 attempts!');
-        console.error('This means the user session was lost during OAuth redirect.');
-        console.error('Possible causes:');
-        console.error('1. Session expired during redirect');
-        console.error('2. Domain mismatch (localhost vs production)');
-        console.error('3. Browser cleared localStorage');
-        console.error('4. Supabase session not persisting across redirects');
+      // No session found after multiple attempts - try using stored user ID
+      console.error('❌❌❌ CRITICAL: No session found after 8 attempts!');
+      console.error('This means the user session was lost during OAuth redirect.');
+      console.error('Possible causes:');
+      console.error('1. Session expired during redirect');
+      console.error('2. Domain mismatch (localhost vs production)');
+      console.error('3. Browser cleared localStorage');
+      console.error('4. Supabase session not persisting across redirects');
+      
+      // Check if we have a stored user ID from before the redirect
+      const storedUserId = sessionStorage.getItem('spotify_connect_user_id');
+      if (storedUserId) {
+        console.log('💡 Found stored user ID from before redirect:', storedUserId);
+        console.log('💾 Attempting to save tokens with stored user ID...');
         
-        // Check if we can find any user info in localStorage
-        const allKeys = Object.keys(localStorage);
-        const supabaseKeys = allKeys.filter(k => k.includes('supabase'));
-        console.log('📦 All Supabase keys in localStorage:', supabaseKeys);
-        
-        console.log('⚠️ Storing tokens for later and redirecting to login');
-        // Store tokens temporarily and redirect to login
-        sessionStorage.setItem('spotify_tokens', JSON.stringify({
-          accessToken,
-          refreshToken,
-          spotifyUserId
-        }));
-        setError('Your session expired. Please log in again to connect your Spotify account.');
-        setCurrentScreen('login');
-        // Clean URL
-        window.history.replaceState({}, document.title, '/');
-        return;
+        try {
+          // Try to save tokens directly using the stored user ID
+          await handleSaveSpotifyTokens(accessToken, refreshToken, spotifyUserId, storedUserId);
+          // Clear the stored user ID
+          sessionStorage.removeItem('spotify_connect_user_id');
+          console.log('✅ Tokens saved successfully using stored user ID');
+          // Clean URL and redirect to profile
+          window.history.replaceState({}, document.title, '/');
+          setCurrentScreen('profile');
+          return;
+        } catch (err) {
+          console.error('❌ Failed to save tokens with stored user ID:', err);
+          // Fall through to login redirect
+        }
+      }
+      
+      // Check if we can find any user info in localStorage
+      const allKeys = Object.keys(localStorage);
+      const supabaseKeys = allKeys.filter(k => k.includes('supabase'));
+      console.log('📦 All Supabase keys in localStorage:', supabaseKeys);
+      
+      console.log('⚠️ Storing tokens for later and redirecting to login');
+      // Store tokens temporarily and redirect to login
+      sessionStorage.setItem('spotify_tokens', JSON.stringify({
+        accessToken,
+        refreshToken,
+        spotifyUserId
+      }));
+      setError('Your session expired. Please log in again to connect your Spotify account.');
+      setCurrentScreen('login');
+      // Clean URL
+      window.history.replaceState({}, document.title, '/');
+      return;
       }
 
       // Check for existing session on mount (only if no OAuth callback)
@@ -769,7 +800,31 @@ export default function App() {
   );
 
   const renderSpotifyConnect = () => {
-    const handleSpotifyConnect = () => {
+    const handleSpotifyConnect = async () => {
+      // Check if user is logged in before connecting Spotify
+      console.log('🔍 Checking user session before Spotify connect...');
+      const { data: session, error: sessionError } = await auth.getSession();
+      
+      if (sessionError) {
+        console.error('❌ Session error:', sessionError);
+        setError('Please log in first to connect your Spotify account');
+        setCurrentScreen('login');
+        return;
+      }
+      
+      if (!session?.user) {
+        console.warn('⚠️ No user session found, redirecting to login');
+        setError('Please log in first to connect your Spotify account');
+        setCurrentScreen('login');
+        return;
+      }
+      
+      console.log('✅ User logged in, proceeding with Spotify OAuth');
+      console.log('👤 User ID:', session.user.id);
+      
+      // Store user ID in sessionStorage as backup
+      sessionStorage.setItem('spotify_connect_user_id', session.user.id);
+      
       // Redirect to backend OAuth endpoint
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
       window.location.href = `${backendUrl}/api/auth/spotify`;
