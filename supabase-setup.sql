@@ -55,6 +55,12 @@ CREATE TABLE IF NOT EXISTS listening_data (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Unique constraint to prevent duplicate listening events
+-- This allows upsert to work properly when syncing data
+ALTER TABLE listening_data
+ADD CONSTRAINT IF NOT EXISTS listening_data_unique_event 
+UNIQUE (user_id, artist_id, track_id, played_at);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_listening_data_user_id ON listening_data(user_id);
 CREATE INDEX IF NOT EXISTS idx_listening_data_artist_id ON listening_data(artist_id);
