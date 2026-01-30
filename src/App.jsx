@@ -803,27 +803,48 @@ export default function App() {
     const handleSpotifyConnect = async () => {
       // Check if user is logged in before connecting Spotify
       console.log('🔍 Checking user session before Spotify connect...');
-      const { data: session, error: sessionError } = await auth.getSession();
       
-      if (sessionError) {
-        console.error('❌ Session error:', sessionError);
+      // Try multiple ways to get user ID
+      let userId = null;
+      
+      // Method 1: Check currentUser state
+      if (currentUser?.id) {
+        userId = currentUser.id;
+        console.log('✅ Found user ID from currentUser:', userId);
+      }
+      
+      // Method 2: Check userProfile state
+      if (!userId && userProfile?.id) {
+        userId = userProfile.id;
+        console.log('✅ Found user ID from userProfile:', userId);
+      }
+      
+      // Method 3: Check Supabase session
+      if (!userId) {
+        const { data: session, error: sessionError } = await auth.getSession();
+        
+        if (sessionError) {
+          console.error('❌ Session error:', sessionError);
+        } else if (session?.user) {
+          userId = session.user.id;
+          console.log('✅ Found user ID from session:', userId);
+        }
+      }
+      
+      // If still no user ID, redirect to login
+      if (!userId) {
+        console.warn('⚠️ No user ID found from any source, redirecting to login');
+        console.log('Current user state:', { currentUser, userProfile });
         setError('Please log in first to connect your Spotify account');
         setCurrentScreen('login');
         return;
       }
       
-      if (!session?.user) {
-        console.warn('⚠️ No user session found, redirecting to login');
-        setError('Please log in first to connect your Spotify account');
-        setCurrentScreen('login');
-        return;
-      }
-      
-      console.log('✅ User logged in, proceeding with Spotify OAuth');
-      console.log('👤 User ID:', session.user.id);
+      console.log('✅ User ID confirmed, proceeding with Spotify OAuth');
+      console.log('👤 User ID:', userId);
       
       // Store user ID in sessionStorage as backup
-      sessionStorage.setItem('spotify_connect_user_id', session.user.id);
+      sessionStorage.setItem('spotify_connect_user_id', userId);
       
       // Redirect to backend OAuth endpoint
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
