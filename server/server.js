@@ -229,6 +229,29 @@ app.post('/api/spotify/refresh-token', async (req, res) => {
   }
 });
 
+// Helper function to refresh Spotify token
+const refreshSpotifyToken = async (refreshToken) => {
+  try {
+    const tokenResponse = await axios.post('https://accounts.spotify.com/api/token',
+      new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: process.env.SPOTIFY_CLIENT_ID,
+        client_secret: process.env.SPOTIFY_CLIENT_SECRET
+      }),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      }
+    );
+    return tokenResponse.data.access_token;
+  } catch (err) {
+    console.error('Token refresh error:', err.response?.data || err.message);
+    throw err;
+  }
+};
+
 // Sync listening data from Spotify
 app.post('/api/spotify/sync-listening-data', async (req, res) => {
   try {
@@ -238,17 +261,71 @@ app.post('/api/spotify/sync-listening-data', async (req, res) => {
       return res.status(400).json({ error: 'User ID and access token required' });
     }
 
-    // Fetch recently played tracks
-    const recentlyPlayedResponse = await axios.get(
-      'https://api.spotify.com/v1/me/player/recently-played?limit=50',
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
+    // Get refresh token from database
+    const { data: userProfile, error: profileError } = await supabase
+      .from('users')
+      .select('spotify_refresh_token')
+      .eq('id', userId)
+      .single();
+
+    if (profileError || !userProfile?.spotify_refresh_token) {
+      return res.status(400).json({ error: 'User Spotify tokens not found' });
+    }
+
+    let tokenToUse = accessToken;
+
+    // Try to fetch recently played tracks
+    let recentlyPlayedResponse;
+    try {
+      recentlyPlayedResponse = await axios.get(
+        'https://api.spotify.com/v1/me/player/recently-played?limit=50',
+        {
+          headers: {
+            'Authorization': `Bearer ${tokenToUse}`
+          }
         }
+      );
+    } catch (err) {
+      // If 401, token expired - refresh it
+      if (err.response?.status === 401) {
+        console.log('🔄 Access token expired, refreshing...');
+        try {
+          tokenToUse = await refreshSpotifyToken(userProfile.spotify_refresh_token);
+          // Update token in database
+          await supabase
+            .from('users')
+            .update({ spotify_access_token: tokenToUse })
+            .eq('id', userId);
+          
+          // Retry the request with new token
+          recentlyPlayedResponse = await axios.get(
+            'https://api.spotify.com/v1/me/player/recently-played?limit=50',
+            {
+              headers: {
+                'Authorization': `Bearer ${tokenToUse}`
+              }
+            }
+          );
+          console.log('✅ Token refreshed and request retried successfully');
+        } catch (refreshErr) {
+          console.error('❌ Failed to refresh token:', refreshErr.response?.data || refreshErr.message);
+          return res.status(401).json({ error: 'Spotify token expired and refresh failed. Please reconnect Spotify.' });
+        }
+      } else {
+        throw err;
       }
-    );
+    }
 
     const tracks = recentlyPlayedResponse.data.items;
+    
+    if (!tracks || tracks.length === 0) {
+      return res.json({ 
+        success: true, 
+        synced: 0,
+        message: 'No recent tracks to sync'
+      });
+    }
+
     const listeningEvents = tracks.map(track => ({
       user_id: userId,
       artist_id: track.track.artists[0]?.id || 'unknown',
@@ -268,16 +345,37 @@ app.post('/api/spotify/sync-listening-data', async (req, res) => {
       })
       .select();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Database error:', error);
+      throw error;
+    }
 
     res.json({ 
       success: true, 
       synced: data.length,
-      message: `Synced ${data.length} listening events`
+      message: `Synced ${data.length} listening events`,
+      tokenRefreshed: tokenToUse !== accessToken
     });
   } catch (err) {
     console.error('Sync error:', err.response?.data || err.message);
-    res.status(500).json({ error: err.message || 'Failed to sync listening data' });
+    
+    // Provide more specific error messages
+    if (err.response?.status === 401) {
+      res.status(401).json({ 
+        error: 'Spotify token expired. Please reconnect your Spotify account.',
+        code: 'TOKEN_EXPIRED'
+      });
+    } else if (err.response?.status === 403) {
+      res.status(403).json({ 
+        error: 'Spotify access denied. Please check your Spotify app settings.',
+        code: 'ACCESS_DENIED'
+      });
+    } else {
+      res.status(500).json({ 
+        error: err.message || 'Failed to sync listening data',
+        code: 'SYNC_FAILED'
+      });
+    }
   }
 });
 

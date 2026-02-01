@@ -140,11 +140,19 @@ export default function App() {
         const syncResult = await syncResponse.json();
         if (syncResponse.ok) {
           console.log('✅ Spotify data synced successfully:', syncResult);
+          // If token was refreshed, reload user profile to get new token
+          if (syncResult.tokenRefreshed) {
+            console.log('🔄 Token was refreshed, reloading profile...');
+            await loadUserData(userId);
+          }
           // Reload stats and top artists after sync
           await loadUserStats();
           await loadTopArtists();
         } else {
           console.warn('⚠️ Sync completed but may have issues:', syncResult);
+          if (syncResult.code === 'TOKEN_EXPIRED') {
+            console.warn('⚠️ Token expired - user may need to reconnect Spotify');
+          }
         }
       } catch (syncErr) {
         console.error('❌ Error syncing Spotify data:', syncErr);
@@ -1039,11 +1047,23 @@ export default function App() {
                   const syncResult = await syncResponse.json();
                   if (syncResponse.ok) {
                     console.log('✅ Data synced:', syncResult);
+                    // If token was refreshed, reload user profile to get new token
+                    if (syncResult.tokenRefreshed) {
+                      console.log('🔄 Token was refreshed, reloading profile...');
+                      await loadUserData(currentUser.id);
+                    }
                     await loadUserStats();
                     await loadTopArtists();
                     setError(null);
                   } else {
-                    throw new Error(syncResult.error || 'Sync failed');
+                    // Handle specific error codes
+                    if (syncResult.code === 'TOKEN_EXPIRED') {
+                      setError('Spotify connection expired. Please reconnect your Spotify account.');
+                      // Optionally redirect to reconnect
+                      // setCurrentScreen('spotify-connect');
+                    } else {
+                      throw new Error(syncResult.error || 'Sync failed');
+                    }
                   }
                 } catch (err) {
                   console.error('Sync error:', err);
