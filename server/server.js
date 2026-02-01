@@ -306,8 +306,11 @@ const syncUserSpotifyData = async (userId, accessToken, refreshToken) => {
     const tracks = recentlyPlayedResponse.data.items;
     
     if (!tracks || tracks.length === 0) {
+      console.log(`ℹ️  User ${userId}: No recent tracks found (user may not have played music recently)`);
       return { success: true, synced: 0, error: null };
     }
+    
+    console.log(`📊 User ${userId}: Found ${tracks.length} recent tracks from Spotify`);
 
     const listeningEvents = tracks.map(track => ({
       user_id: userId,
@@ -434,10 +437,30 @@ app.get('/api/spotify/top-artists', async (req, res) => {
 });
 
 // ==================== SCHEDULED SYNC ====================
+// Track sync status
+let lastSyncStatus = {
+  lastRun: null,
+  success: false,
+  usersProcessed: 0,
+  tracksSynced: 0,
+  errors: []
+};
+
 // Sync all users' Spotify data every 60 minutes
 const syncAllUsers = async () => {
+  const syncStartTime = new Date();
   console.log('🔄 Starting scheduled sync for all users...');
+  console.log('📅 Sync start time:', syncStartTime.toISOString());
   const startTime = Date.now();
+  
+  // Reset status
+  lastSyncStatus = {
+    lastRun: syncStartTime.toISOString(),
+    success: false,
+    usersProcessed: 0,
+    tracksSynced: 0,
+    errors: []
+  };
   
   try {
     // Get all users with Spotify tokens
@@ -498,8 +521,17 @@ const syncAllUsers = async () => {
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`✅ Scheduled sync completed in ${duration}s`);
     console.log(`   Success: ${successCount}, Failed: ${failCount}, Total tracks synced: ${totalSynced}`);
+    
+    // Update status
+    lastSyncStatus.success = true;
+    lastSyncStatus.usersProcessed = users.length;
+    lastSyncStatus.tracksSynced = totalSynced;
+    lastSyncStatus.successCount = successCount;
+    lastSyncStatus.failCount = failCount;
+    lastSyncStatus.duration = `${duration}s`;
   } catch (err) {
     console.error('❌ Scheduled sync error:', err);
+    lastSyncStatus.errors.push(err.message);
   }
 };
 
@@ -525,6 +557,37 @@ console.log('✅ Scheduled sync configured: Every 60 minutes');
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Sync status endpoint - check if scheduled sync is working
+app.get('/api/spotify/sync-status', (req, res) => {
+  const now = new Date();
+  const lastRun = lastSyncStatus.lastRun ? new Date(lastSyncStatus.lastRun) : null;
+  
+  let timeSinceLastSync = null;
+  if (lastRun) {
+    const diffMs = now - lastRun;
+    const diffMinutes = Math.floor(diffMs / 60000);
+    timeSinceLastSync = `${diffMinutes} minutes ago`;
+  }
+  
+  res.json({
+    scheduledSyncEnabled: true,
+    interval: '60 minutes',
+    lastSync: {
+      runTime: lastSyncStatus.lastRun,
+      timeAgo: timeSinceLastSync,
+      success: lastSyncStatus.success,
+      usersProcessed: lastSyncStatus.usersProcessed,
+      tracksSynced: lastSyncStatus.tracksSynced,
+      successCount: lastSyncStatus.successCount || 0,
+      failCount: lastSyncStatus.failCount || 0,
+      duration: lastSyncStatus.duration,
+      errors: lastSyncStatus.errors
+    },
+    nextSync: lastRun ? new Date(lastRun.getTime() + 60 * 60 * 1000).toISOString() : 'Not yet run',
+    serverTime: now.toISOString()
+  });
 });
 
 // Manual trigger endpoint for testing (optional - can be removed in production)
