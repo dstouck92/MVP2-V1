@@ -70,9 +70,10 @@ CREATE INDEX IF NOT EXISTS idx_listening_data_user_artist ON listening_data(user
 -- Enable Row Level Security
 ALTER TABLE listening_data ENABLE ROW LEVEL SECURITY;
 
--- Policy: Users can view their own listening data
-CREATE POLICY "Users can view own listening data" ON listening_data
-  FOR SELECT USING (auth.uid() = user_id);
+-- Policy: Users can view ALL listening data (needed for artist search and leaderboards)
+-- This allows users to search for artists and view leaderboards for any artist
+CREATE POLICY "Users can view all listening data" ON listening_data
+  FOR SELECT USING (true);
 
 -- Policy: Users can insert their own listening data
 CREATE POLICY "Users can insert own listening data" ON listening_data
