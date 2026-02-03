@@ -31,9 +31,10 @@ CREATE POLICY "Users can insert own profile" ON users
   FOR INSERT 
   WITH CHECK (auth.uid() = id);
 
--- Policy: Users can read their own data
-CREATE POLICY "Users can view own profile" ON users
-  FOR SELECT USING (auth.uid() = id);
+-- Policy: Users can view ALL profiles (needed for leaderboards and social features)
+-- This allows users to see other users' usernames and avatars in leaderboards
+CREATE POLICY "Users can view all profiles" ON users
+  FOR SELECT USING (true);
 
 -- Policy: Users can update their own data
 CREATE POLICY "Users can update own profile" ON users
