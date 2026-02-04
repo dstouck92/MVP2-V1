@@ -1018,7 +1018,25 @@ export default function App() {
             <span className="logo-text">HERD</span>
           </div>
         </div>
-        <div className="header-right">
+        <div className="header-right" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <button
+            onClick={() => {
+              setCurrentScreen('analytics');
+              loadAnalytics();
+            }}
+            style={{
+              background: '#F3F4F6',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '0.5rem 1rem',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              color: '#1F2937'
+            }}
+          >
+            📊 Analytics
+          </button>
           <div className="search-bar">
             <Search size={18} />
             <input 
