@@ -1269,6 +1269,7 @@ export default function App() {
               <option value="past-week">Past Week</option>
               <option value="this-month">This Month</option>
               <option value="all-time">All Time</option>
+              <option value="superbowl-competition">Superbowl Competition</option>
             </select>
           </div>
 
@@ -1470,6 +1471,7 @@ export default function App() {
               <option value="all-time">All Time</option>
               <option value="this-month">Past Month</option>
               <option value="past-week">Past Week</option>
+              <option value="superbowl-competition">Superbowl Competition</option>
             </select>
           </div>
         </div>
