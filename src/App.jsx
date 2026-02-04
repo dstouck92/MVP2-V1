@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Music, Users, Clock, Send, ChevronDown } from 'lucide-react';
 import './App.css';
-import { auth, users, listeningData, leaderboards, comments } from './lib/supabase';
+import { auth, users, listeningData, leaderboards, comments, analytics } from './lib/supabase';
 
 // ==================== CONSTANTS ====================
 const ANIMAL_AVATARS = ['🐐', '🐑', '🐴', '🦌', '🐮', '🐘', '🐕', '🐈'];
@@ -39,6 +39,8 @@ export default function App() {
   const [commentsData, setCommentsData] = useState([]);
   const [artistSearchResults, setArtistSearchResults] = useState([]);
   const [showArtistSearchResults, setShowArtistSearchResults] = useState(false);
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   // ==================== HELPER FUNCTIONS (defined first) ====================
   const checkSession = async () => {
@@ -405,6 +407,16 @@ export default function App() {
         } else if (currentScreen === 'welcome') {
           setCurrentScreen('profile');
         }
+        
+        // Track app visit
+        try {
+          await analytics.trackEvent(userId, 'app_visit', {
+            screen: currentScreen || 'profile'
+          });
+        } catch (analyticsError) {
+          console.error('Error tracking app visit:', analyticsError);
+          // Don't block app functionality if analytics fails
+        }
       }
     } catch (err) {
       console.error('Error loading user data:', err);
@@ -603,6 +615,20 @@ export default function App() {
       if (artistName) {
         setSelectedArtist({ id: artistId, name: artistName });
       }
+      
+      // Track leaderboard view
+      if (currentUser?.id) {
+        try {
+          await analytics.trackEvent(currentUser.id, 'leaderboard_view', {
+            artist_id: artistId,
+            artist_name: artistName || selectedArtist?.name || 'Unknown',
+            time_filter: timeFilter
+          });
+        } catch (analyticsError) {
+          console.error('Error tracking leaderboard view:', analyticsError);
+          // Don't block app functionality if analytics fails
+        }
+      }
     } catch (err) {
       console.error('Error loading leaderboard:', err);
       setError('Failed to load leaderboard');
@@ -623,6 +649,19 @@ export default function App() {
       if (error) throw error;
       setArtistSearchResults(data || []);
       setShowArtistSearchResults(true);
+      
+      // Track artist search
+      if (currentUser?.id) {
+        try {
+          await analytics.trackEvent(currentUser.id, 'artist_search', {
+            search_query: query.trim(),
+            results_count: data?.length || 0
+          });
+        } catch (analyticsError) {
+          console.error('Error tracking artist search:', analyticsError);
+          // Don't block app functionality if analytics fails
+        }
+      }
     } catch (err) {
       console.error('Error searching artists:', err);
       setArtistSearchResults([]);
@@ -644,6 +683,34 @@ export default function App() {
       setCommentsData(data || []);
     } catch (err) {
       console.error('Error loading comments:', err);
+    }
+  };
+
+  const loadAnalytics = async () => {
+    if (!currentUser?.id) return;
+    setAnalyticsLoading(true);
+    try {
+      // Get event counts
+      const { data: eventCounts, error: countsError } = await analytics.getEventCounts(30);
+      if (countsError) throw countsError;
+      
+      // Get unique users for each event type
+      const uniqueUsers = {};
+      const eventTypes = ['app_visit', 'leaderboard_view', 'artist_search', 'sync_data'];
+      for (const eventType of eventTypes) {
+        const { data: count } = await analytics.getUniqueUsersByEvent(eventType, 30);
+        uniqueUsers[eventType] = count || 0;
+      }
+      
+      setAnalyticsData({
+        eventCounts: eventCounts || {},
+        uniqueUsers
+      });
+    } catch (err) {
+      console.error('Error loading analytics:', err);
+      setError('Failed to load analytics');
+    } finally {
+      setAnalyticsLoading(false);
     }
   };
 
@@ -1055,6 +1122,17 @@ export default function App() {
                     await loadUserStats();
                     await loadTopArtists();
                     setError(null);
+                    
+                    // Track sync data event
+                    try {
+                      await analytics.trackEvent(currentUser.id, 'sync_data', {
+                        synced_count: syncResult.synced || 0,
+                        token_refreshed: syncResult.tokenRefreshed || false
+                      });
+                    } catch (analyticsError) {
+                      console.error('Error tracking sync data:', analyticsError);
+                      // Don't block app functionality if analytics fails
+                    }
                   } else {
                     // Handle specific error codes
                     if (syncResult.code === 'TOKEN_EXPIRED') {
@@ -1468,6 +1546,7 @@ export default function App() {
       {currentScreen === 'spotify-connect' && renderSpotifyConnect()}
       {currentScreen === 'profile' && renderProfileScreen()}
       {currentScreen === 'leaderboard' && renderLeaderboardScreen()}
+      {currentScreen === 'analytics' && renderAnalyticsScreen()}
     </div>
   );
 }

@@ -483,4 +483,109 @@ export const comments = {
   }
 };
 
+// ==================== ANALYTICS ====================
+export const analytics = {
+  // Track an analytics event
+  trackEvent: async (userId, eventType, eventData = {}) => {
+    if (!supabase) return { error: 'Supabase not configured' };
+    if (!userId) return { error: 'User ID required' };
+    
+    const { data, error } = await supabase
+      .from('analytics')
+      .insert({
+        user_id: userId,
+        event_type: eventType,
+        event_data: eventData
+      })
+      .select()
+      .single();
+    
+    return { data, error };
+  },
+
+  // Get analytics for a specific user
+  getUserAnalytics: async (userId, eventType = null, limit = 100) => {
+    if (!supabase) return { error: 'Supabase not configured' };
+    
+    let query = supabase
+      .from('analytics')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    
+    if (eventType) {
+      query = query.eq('event_type', eventType);
+    }
+    
+    const { data, error } = await query;
+    return { data, error };
+  },
+
+  // Get analytics summary (for admin dashboard)
+  getAnalyticsSummary: async (eventType = null, days = 30) => {
+    if (!supabase) return { error: 'Supabase not configured' };
+    
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    
+    let query = supabase
+      .from('analytics')
+      .select('*')
+      .gte('created_at', startDate.toISOString())
+      .order('created_at', { ascending: false });
+    
+    if (eventType) {
+      query = query.eq('event_type', eventType);
+    }
+    
+    const { data, error } = await query;
+    return { data, error };
+  },
+
+  // Get event counts by type
+  getEventCounts: async (days = 30) => {
+    if (!supabase) return { error: 'Supabase not configured' };
+    
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    
+    const { data, error } = await supabase
+      .from('analytics')
+      .select('event_type, created_at')
+      .gte('created_at', startDate.toISOString());
+    
+    if (error) return { data: null, error };
+    
+    // Count events by type
+    const counts = {};
+    data.forEach(event => {
+      counts[event.event_type] = (counts[event.event_type] || 0) + 1;
+    });
+    
+    return { data: counts, error: null };
+  },
+
+  // Get unique users by event type
+  getUniqueUsersByEvent: async (eventType, days = 30) => {
+    if (!supabase) return { error: 'Supabase not configured' };
+    
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    
+    const { data, error } = await supabase
+      .from('analytics')
+      .select('user_id')
+      .eq('event_type', eventType)
+      .gte('created_at', startDate.toISOString());
+    
+    if (error) return { data: null, error };
+    
+    // Get unique user IDs
+    const uniqueUsers = new Set(data.map(event => event.user_id));
+    
+    return { data: uniqueUsers.size, error: null };
+  }
+};
+
 export default supabase;
