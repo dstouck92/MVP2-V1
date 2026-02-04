@@ -242,6 +242,12 @@ export const listeningData = {
       const monthAgo = new Date();
       monthAgo.setMonth(monthAgo.getMonth() - 1);
       query = query.gte('played_at', monthAgo.toISOString());
+    } else if (timeRange === 'superbowl-competition') {
+      // Superbowl Competition: Sunday, February 5, 2024 12:00pm CT to Wednesday, February 8, 2024 12:00pm CT
+      // CT is UTC-6 (CST in February), so 12:00pm CT = 6:00pm UTC
+      const startDate = new Date('2024-02-05T18:00:00Z'); // Sunday, Feb 5, 2024 12:00pm CT (6:00pm UTC)
+      const endDate = new Date('2024-02-08T18:00:00Z'); // Wednesday, Feb 8, 2024 12:00pm CT (6:00pm UTC)
+      query = query.gte('played_at', startDate.toISOString()).lte('played_at', endDate.toISOString());
     }
 
     const { data, error } = await query;
@@ -278,6 +284,12 @@ export const listeningData = {
       const monthAgo = new Date();
       monthAgo.setMonth(monthAgo.getMonth() - 1);
       query = query.gte('played_at', monthAgo.toISOString());
+    } else if (timeRange === 'superbowl-competition') {
+      // Superbowl Competition: Sunday, February 5, 2024 12:00pm CT to Wednesday, February 8, 2024 12:00pm CT
+      // CT is UTC-6 (CST in February), so 12:00pm CT = 6:00pm UTC
+      const startDate = new Date('2024-02-05T18:00:00Z'); // Sunday, Feb 5, 2024 12:00pm CT (6:00pm UTC)
+      const endDate = new Date('2024-02-08T18:00:00Z'); // Wednesday, Feb 8, 2024 12:00pm CT (6:00pm UTC)
+      query = query.gte('played_at', startDate.toISOString()).lte('played_at', endDate.toISOString());
     }
 
     const { data, error } = await query;
@@ -359,6 +371,12 @@ export const leaderboards = {
       const monthAgo = new Date();
       monthAgo.setMonth(monthAgo.getMonth() - 1);
       query = query.gte('played_at', monthAgo.toISOString());
+    } else if (timeRange === 'superbowl-competition') {
+      // Superbowl Competition: Sunday, February 5, 2024 12:00pm CT to Wednesday, February 8, 2024 12:00pm CT
+      // CT is UTC-6 (CST in February), so 12:00pm CT = 6:00pm UTC
+      const startDate = new Date('2024-02-05T18:00:00Z'); // Sunday, Feb 5, 2024 12:00pm CT (6:00pm UTC)
+      const endDate = new Date('2024-02-08T18:00:00Z'); // Wednesday, Feb 8, 2024 12:00pm CT (6:00pm UTC)
+      query = query.gte('played_at', startDate.toISOString()).lte('played_at', endDate.toISOString());
     }
 
     const { data, error } = await query;
