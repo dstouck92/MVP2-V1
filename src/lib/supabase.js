@@ -585,6 +585,63 @@ export const analytics = {
     const uniqueUsers = new Set(data.map(event => event.user_id));
     
     return { data: uniqueUsers.size, error: null };
+  },
+
+  // Get session duration statistics
+  getSessionStats: async (days = 30) => {
+    if (!supabase) return { error: 'Supabase not configured' };
+    
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    
+    const { data, error } = await supabase
+      .from('analytics')
+      .select('event_data, user_id')
+      .eq('event_type', 'session_end')
+      .gte('created_at', startDate.toISOString());
+    
+    if (error) return { data: null, error };
+    
+    if (!data || data.length === 0) {
+      return { 
+        data: {
+          totalSessions: 0,
+          averageDurationSeconds: 0,
+          averageDurationMinutes: 0,
+          totalDurationSeconds: 0,
+          totalDurationMinutes: 0
+        }, 
+        error: null 
+      };
+    }
+    
+    // Calculate statistics
+    const durations = data
+      .map(event => event.event_data?.duration_seconds || 0)
+      .filter(d => d > 0);
+    
+    const totalSessions = durations.length;
+    const totalDurationSeconds = durations.reduce((sum, d) => sum + d, 0);
+    const averageDurationSeconds = totalSessions > 0 ? Math.floor(totalDurationSeconds / totalSessions) : 0;
+    const averageDurationMinutes = Math.floor(averageDurationSeconds / 60);
+    const totalDurationMinutes = Math.floor(totalDurationSeconds / 60);
+    
+    // Get unique users who had sessions
+    const uniqueUsers = new Set(data.map(event => event.user_id));
+    
+    return { 
+      data: {
+        totalSessions,
+        averageDurationSeconds,
+        averageDurationMinutes,
+        averageDurationFormatted: `${averageDurationMinutes}m ${averageDurationSeconds % 60}s`,
+        totalDurationSeconds,
+        totalDurationMinutes,
+        totalDurationFormatted: `${totalDurationMinutes}m`,
+        uniqueUsers: uniqueUsers.size
+      }, 
+      error: null 
+    };
   }
 };
 

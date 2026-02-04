@@ -41,6 +41,7 @@ export default function App() {
   const [showArtistSearchResults, setShowArtistSearchResults] = useState(false);
   const [analyticsData, setAnalyticsData] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [sessionStartTime, setSessionStartTime] = useState(null);
 
   // ==================== HELPER FUNCTIONS (defined first) ====================
   const checkSession = async () => {
@@ -381,6 +382,44 @@ export default function App() {
     }
   }, [timeFilter, currentUser, currentScreen]);
 
+  // Track session end when page unloads
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (currentUser?.id && sessionStartTime) {
+        // Use sendBeacon for reliable tracking on page unload
+        const sessionEnd = new Date();
+        const durationSeconds = Math.floor((sessionEnd - sessionStartTime) / 1000);
+        const durationMinutes = Math.floor(durationSeconds / 60);
+        
+        // Store in sessionStorage to be sent on next page load if needed
+        const sessionData = {
+          userId: currentUser.id,
+          duration_seconds: durationSeconds,
+          duration_minutes: durationMinutes,
+          duration_formatted: `${durationMinutes}m ${durationSeconds % 60}s`,
+          timestamp: sessionEnd.toISOString()
+        };
+        sessionStorage.setItem('pending_session_end', JSON.stringify(sessionData));
+        
+        // Try to send via sendBeacon (if available)
+        if (navigator.sendBeacon) {
+          const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+          const data = JSON.stringify({
+            userId: currentUser.id,
+            eventType: 'session_end',
+            eventData: sessionData
+          });
+          navigator.sendBeacon(`${backendUrl}/api/analytics/track`, data);
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [currentUser, sessionStartTime]);
+
   // ==================== HELPER FUNCTIONS ====================
   const loadUserData = async (userId) => {
     try {
@@ -415,6 +454,19 @@ export default function App() {
           });
         } catch (analyticsError) {
           console.error('Error tracking app visit:', analyticsError);
+          // Don't block app functionality if analytics fails
+        }
+        
+        // Track session start
+        const sessionStart = new Date();
+        setSessionStartTime(sessionStart);
+        try {
+          await analytics.trackEvent(userId, 'session_start', {
+            screen: currentScreen || 'profile',
+            timestamp: sessionStart.toISOString()
+          });
+        } catch (analyticsError) {
+          console.error('Error tracking session start:', analyticsError);
           // Don't block app functionality if analytics fails
         }
       }
@@ -571,7 +623,32 @@ export default function App() {
     }
   };
 
+  const trackSessionEnd = async (userId) => {
+    if (!sessionStartTime || !userId) return;
+    
+    const sessionEnd = new Date();
+    const durationSeconds = Math.floor((sessionEnd - sessionStartTime) / 1000);
+    const durationMinutes = Math.floor(durationSeconds / 60);
+    
+    try {
+      await analytics.trackEvent(userId, 'session_end', {
+        duration_seconds: durationSeconds,
+        duration_minutes: durationMinutes,
+        duration_formatted: `${durationMinutes}m ${durationSeconds % 60}s`,
+        timestamp: sessionEnd.toISOString()
+      });
+      setSessionStartTime(null);
+    } catch (analyticsError) {
+      console.error('Error tracking session end:', analyticsError);
+      // Don't block app functionality if analytics fails
+    }
+  };
+
   const handleLogout = async () => {
+    // Track session end before logging out
+    if (currentUser?.id && sessionStartTime) {
+      await trackSessionEnd(currentUser.id);
+    }
     try {
       await auth.signOut();
       setCurrentUser(null);
@@ -696,15 +773,22 @@ export default function App() {
       
       // Get unique users for each event type
       const uniqueUsers = {};
-      const eventTypes = ['app_visit', 'leaderboard_view', 'artist_search', 'sync_data'];
+      const eventTypes = ['app_visit', 'leaderboard_view', 'artist_search', 'sync_data', 'session_start', 'session_end'];
       for (const eventType of eventTypes) {
         const { data: count } = await analytics.getUniqueUsersByEvent(eventType, 30);
         uniqueUsers[eventType] = count || 0;
       }
       
+      // Get session duration statistics
+      const { data: sessionStats, error: sessionError } = await analytics.getSessionStats(30);
+      if (sessionError) {
+        console.error('Error loading session stats:', sessionError);
+      }
+      
       setAnalyticsData({
         eventCounts: eventCounts || {},
-        uniqueUsers
+        uniqueUsers,
+        sessionStats: sessionStats || null
       });
     } catch (err) {
       console.error('Error loading analytics:', err);
@@ -1564,7 +1648,140 @@ export default function App() {
       {currentScreen === 'spotify-connect' && renderSpotifyConnect()}
       {currentScreen === 'profile' && renderProfileScreen()}
       {currentScreen === 'leaderboard' && renderLeaderboardScreen()}
-      {currentScreen === 'analytics' && renderAnalyticsScreen()}
+      {currentScreen === 'analytics' && (
+        <div className="main-app">
+          <header className="app-header">
+            <div className="header-left">
+              <button 
+                onClick={() => setCurrentScreen('profile')}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.5rem' }}
+              >
+                ← Back
+              </button>
+              <div className="logo-header">
+                <span className="logo-goat-tiny">📊</span>
+                <span className="logo-text">Analytics</span>
+              </div>
+            </div>
+          </header>
+
+          <div className="app-content" style={{ padding: '1.5rem' }}>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <button 
+                onClick={loadAnalytics}
+                disabled={analyticsLoading}
+                className="btn-primary"
+                style={{ width: '100%' }}
+              >
+                {analyticsLoading ? 'Loading...' : 'Refresh Analytics'}
+              </button>
+            </div>
+
+            {analyticsData ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {/* Session Duration Stats */}
+                {analyticsData.sessionStats && (
+                  <div style={{
+                    background: 'white',
+                    padding: '1.5rem',
+                    borderRadius: '12px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                  }}>
+                    <h2 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: 600 }}>⏱️ Session Duration (Last 30 Days)</h2>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#F9FAFB', borderRadius: '8px' }}>
+                        <span style={{ fontWeight: 500 }}>Total Sessions</span>
+                        <span style={{ color: '#10B981', fontWeight: 600 }}>{analyticsData.sessionStats.totalSessions}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#F9FAFB', borderRadius: '8px' }}>
+                        <span style={{ fontWeight: 500 }}>Average Session Duration</span>
+                        <span style={{ color: '#3B82F6', fontWeight: 600 }}>{analyticsData.sessionStats.averageDurationFormatted || '0m 0s'}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#F9FAFB', borderRadius: '8px' }}>
+                        <span style={{ fontWeight: 500 }}>Total Time on Platform</span>
+                        <span style={{ color: '#8B5CF6', fontWeight: 600 }}>{analyticsData.sessionStats.totalDurationFormatted || '0m'}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#F9FAFB', borderRadius: '8px' }}>
+                        <span style={{ fontWeight: 500 }}>Unique Users with Sessions</span>
+                        <span style={{ color: '#F59E0B', fontWeight: 600 }}>{analyticsData.sessionStats.uniqueUsers || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Event Counts */}
+                <div style={{
+                  background: 'white',
+                  padding: '1.5rem',
+                  borderRadius: '12px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}>
+                  <h2 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: 600 }}>Event Counts (Last 30 Days)</h2>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#F9FAFB', borderRadius: '8px' }}>
+                      <span style={{ fontWeight: 500 }}>App Visits</span>
+                      <span style={{ color: '#10B981', fontWeight: 600 }}>{analyticsData.eventCounts.app_visit || 0}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#F9FAFB', borderRadius: '8px' }}>
+                      <span style={{ fontWeight: 500 }}>Leaderboard Views</span>
+                      <span style={{ color: '#10B981', fontWeight: 600 }}>{analyticsData.eventCounts.leaderboard_view || 0}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#F9FAFB', borderRadius: '8px' }}>
+                      <span style={{ fontWeight: 500 }}>Artist Searches</span>
+                      <span style={{ color: '#10B981', fontWeight: 600 }}>{analyticsData.eventCounts.artist_search || 0}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#F9FAFB', borderRadius: '8px' }}>
+                      <span style={{ fontWeight: 500 }}>Sync Data Clicks</span>
+                      <span style={{ color: '#10B981', fontWeight: 600 }}>{analyticsData.eventCounts.sync_data || 0}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#F9FAFB', borderRadius: '8px' }}>
+                      <span style={{ fontWeight: 500 }}>Sessions Started</span>
+                      <span style={{ color: '#10B981', fontWeight: 600 }}>{analyticsData.eventCounts.session_start || 0}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#F9FAFB', borderRadius: '8px' }}>
+                      <span style={{ fontWeight: 500 }}>Sessions Ended</span>
+                      <span style={{ color: '#10B981', fontWeight: 600 }}>{analyticsData.eventCounts.session_end || 0}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Unique Users */}
+                <div style={{
+                  background: 'white',
+                  padding: '1.5rem',
+                  borderRadius: '12px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}>
+                  <h2 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: 600 }}>Unique Users (Last 30 Days)</h2>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#F9FAFB', borderRadius: '8px' }}>
+                      <span style={{ fontWeight: 500 }}>Users Who Visited App</span>
+                      <span style={{ color: '#3B82F6', fontWeight: 600 }}>{analyticsData.uniqueUsers.app_visit || 0}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#F9FAFB', borderRadius: '8px' }}>
+                      <span style={{ fontWeight: 500 }}>Users Who Viewed Leaderboards</span>
+                      <span style={{ color: '#3B82F6', fontWeight: 600 }}>{analyticsData.uniqueUsers.leaderboard_view || 0}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#F9FAFB', borderRadius: '8px' }}>
+                      <span style={{ fontWeight: 500 }}>Users Who Searched Artists</span>
+                      <span style={{ color: '#3B82F6', fontWeight: 600 }}>{analyticsData.uniqueUsers.artist_search || 0}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#F9FAFB', borderRadius: '8px' }}>
+                      <span style={{ fontWeight: 500 }}>Users Who Synced Data</span>
+                      <span style={{ color: '#3B82F6', fontWeight: 600 }}>{analyticsData.uniqueUsers.sync_data || 0}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="empty-state">
+                <p>No analytics data loaded</p>
+                <span>Click "Refresh Analytics" to load data</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
