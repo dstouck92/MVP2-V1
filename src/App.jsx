@@ -681,13 +681,33 @@ export default function App() {
     }
   };
 
-  const loadLeaderboard = async (artistId, artistName = null) => {
+  const loadLeaderboard = async (artistId, artistName = null, filterToUse = null) => {
     if (!artistId) return;
     try {
       setLoading(true);
-      const { data, error } = await leaderboards.getArtistLeaderboard(artistId, timeFilter, 10);
-      if (error) throw error;
+      // Clear leaderboard data immediately when loading new data
+      setLeaderboardData([]);
+      
+      // Use provided filter or current timeFilter
+      const filter = filterToUse || timeFilter;
+      
+      console.log('📊 Loading leaderboard:', { artistId, artistName, filter });
+      const { data, error } = await leaderboards.getArtistLeaderboard(artistId, filter, 10);
+      
+      if (error) {
+        console.error('❌ Leaderboard error:', error);
+        throw error;
+      }
+      
+      console.log('✅ Leaderboard loaded:', { 
+        filter, 
+        resultCount: data?.length || 0,
+        data: data || []
+      });
+      
+      // Always set the data, even if empty array
       setLeaderboardData(data || []);
+      
       // Update selected artist if name provided
       if (artistName) {
         setSelectedArtist({ id: artistId, name: artistName });
@@ -699,7 +719,7 @@ export default function App() {
           await analytics.trackEvent(currentUser.id, 'leaderboard_view', {
             artist_id: artistId,
             artist_name: artistName || selectedArtist?.name || 'Unknown',
-            time_filter: timeFilter
+            time_filter: filter
           });
         } catch (analyticsError) {
           console.error('Error tracking leaderboard view:', analyticsError);
@@ -709,6 +729,8 @@ export default function App() {
     } catch (err) {
       console.error('Error loading leaderboard:', err);
       setError('Failed to load leaderboard');
+      // Clear data on error
+      setLeaderboardData([]);
     } finally {
       setLoading(false);
     }
@@ -1462,9 +1484,13 @@ export default function App() {
             <select 
               value={timeFilter}
               onChange={(e) => {
-                setTimeFilter(e.target.value);
+                const newFilter = e.target.value;
+                setTimeFilter(newFilter);
+                // Clear leaderboard data immediately
+                setLeaderboardData([]);
                 if (selectedArtist) {
-                  loadLeaderboard(selectedArtist.id, selectedArtist.name);
+                  // Pass the new filter directly to ensure it's used
+                  loadLeaderboard(selectedArtist.id, selectedArtist.name, newFilter);
                 }
               }}
             >
