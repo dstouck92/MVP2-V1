@@ -245,9 +245,10 @@ export const listeningData = {
     } else if (timeRange === 'superbowl-competition') {
       // Superbowl Competition: Sunday, February 5, 2026 12:00pm CT to Wednesday, February 8, 2026 12:00pm CT
       // CT is UTC-6 (CST in February), so 12:00pm CT = 6:00pm UTC
+      // Use .lt() for end date to exclude data exactly at 12:00pm CT on Wednesday
       const startDate = new Date('2026-02-05T18:00:00Z'); // Sunday, Feb 5, 2026 12:00pm CT (6:00pm UTC)
       const endDate = new Date('2026-02-08T18:00:00Z'); // Wednesday, Feb 8, 2026 12:00pm CT (6:00pm UTC)
-      query = query.gte('played_at', startDate.toISOString()).lte('played_at', endDate.toISOString());
+      query = query.gte('played_at', startDate.toISOString()).lt('played_at', endDate.toISOString());
     }
 
     const { data, error } = await query;
@@ -287,9 +288,10 @@ export const listeningData = {
     } else if (timeRange === 'superbowl-competition') {
       // Superbowl Competition: Sunday, February 5, 2026 12:00pm CT to Wednesday, February 8, 2026 12:00pm CT
       // CT is UTC-6 (CST in February), so 12:00pm CT = 6:00pm UTC
+      // Use .lt() for end date to exclude data exactly at 12:00pm CT on Wednesday
       const startDate = new Date('2026-02-05T18:00:00Z'); // Sunday, Feb 5, 2026 12:00pm CT (6:00pm UTC)
       const endDate = new Date('2026-02-08T18:00:00Z'); // Wednesday, Feb 8, 2026 12:00pm CT (6:00pm UTC)
-      query = query.gte('played_at', startDate.toISOString()).lte('played_at', endDate.toISOString());
+      query = query.gte('played_at', startDate.toISOString()).lt('played_at', endDate.toISOString());
     }
 
     const { data, error } = await query;
@@ -374,6 +376,7 @@ export const leaderboards = {
     } else if (timeRange === 'superbowl-competition') {
       // Superbowl Competition: Sunday, February 5, 2026 12:00pm CT to Wednesday, February 8, 2026 12:00pm CT
       // CT is UTC-6 (CST in February), so 12:00pm CT = 6:00pm UTC
+      // Use .lt() for end date to exclude data exactly at 12:00pm CT on Wednesday
       const startDate = new Date('2026-02-05T18:00:00Z'); // Sunday, Feb 5, 2026 12:00pm CT (6:00pm UTC)
       const endDate = new Date('2026-02-08T18:00:00Z'); // Wednesday, Feb 8, 2026 12:00pm CT (6:00pm UTC)
       console.log('🏈 Superbowl Competition filter applied to leaderboard:', {
@@ -383,7 +386,7 @@ export const leaderboards = {
         startCT: new Date(startDate.getTime()).toLocaleString('en-US', { timeZone: 'America/Chicago' }),
         endCT: new Date(endDate.getTime()).toLocaleString('en-US', { timeZone: 'America/Chicago' })
       });
-      query = query.gte('played_at', startDate.toISOString()).lte('played_at', endDate.toISOString());
+      query = query.gte('played_at', startDate.toISOString()).lt('played_at', endDate.toISOString());
     }
 
     const { data, error } = await query;
