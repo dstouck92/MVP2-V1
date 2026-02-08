@@ -711,6 +711,8 @@ export default function App() {
       // Update selected artist if name provided
       if (artistName) {
         setSelectedArtist({ id: artistId, name: artistName });
+        // Load comments when artist is set
+        setTimeout(() => loadComments(), 100);
       }
       
       // Track leaderboard view
@@ -772,6 +774,8 @@ export default function App() {
     setSearchQuery(artist.name);
     setShowArtistSearchResults(false);
     loadLeaderboard(artist.id, artist.name);
+    // Load comments when artist is selected
+    setTimeout(() => loadComments(), 100);
   };
 
   const loadComments = async () => {

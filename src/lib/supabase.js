@@ -466,15 +466,30 @@ export const comments = {
       `)
       .eq('artist_id', artistId);
 
+    // Fetch all comments first (we'll sort by likes count in JavaScript)
+    const { data, error } = await query.limit(limit);
+    
+    if (error) return { data: null, error };
+    if (!data) return { data: [], error: null };
+
     // Apply sorting
     if (sortBy === 'recent') {
-      query = query.order('created_at', { ascending: false });
+      // Sort by created_at (most recent first)
+      data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     } else if (sortBy === 'liked') {
-      query = query.order('likes', { ascending: false, nullsFirst: false });
+      // Sort by number of likes (array length), then by created_at as tiebreaker
+      data.sort((a, b) => {
+        const aLikes = (a.likes && Array.isArray(a.likes)) ? a.likes.length : 0;
+        const bLikes = (b.likes && Array.isArray(b.likes)) ? b.likes.length : 0;
+        if (bLikes !== aLikes) {
+          return bLikes - aLikes; // More likes first
+        }
+        // If same number of likes, sort by most recent
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
     }
 
-    const { data, error } = await query.limit(limit);
-    return { data, error };
+    return { data, error: null };
   },
 
   // Like/unlike a comment
