@@ -499,9 +499,9 @@ const syncAllUsers = async () => {
     for (let i = 0; i < users.length; i++) {
       const user = users[i];
       
-      // Add 2 second delay between users to avoid rate limits
+      // Add 3 second delay between users to avoid rate limits
       if (i > 0) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 3000));
       }
 
       try {
