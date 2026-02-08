@@ -789,6 +789,34 @@ export default function App() {
     }
   };
 
+  const handleLikeComment = async (commentId) => {
+    if (!currentUser?.id) {
+      setError('Please log in to like comments');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const { data, error } = await comments.toggleLike(commentId, currentUser.id);
+      if (error) throw error;
+      
+      // Update the comment in the commentsData array
+      setCommentsData(prevComments => 
+        prevComments.map(comment => 
+          comment.id === commentId ? { ...comment, likes: data.likes } : comment
+        )
+      );
+      
+      // Reload comments to ensure sorting is correct
+      await loadComments();
+    } catch (err) {
+      console.error('Error toggling like:', err);
+      setError('Failed to like comment');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadAnalytics = async () => {
     if (!currentUser?.id) return;
     setAnalyticsLoading(true);
