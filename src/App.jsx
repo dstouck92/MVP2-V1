@@ -384,17 +384,10 @@ export default function App() {
 
   // Clear comments when selected artist changes
   useEffect(() => {
-    // Clear comments when artist changes (but not on initial mount)
-    if (selectedArtist?.id) {
-      // Only clear if we're on the leaderboard screen
-      if (currentScreen === 'leaderboard') {
-        setCommentsData([]);
-      }
-    } else {
-      // If no artist selected, clear comments
-      setCommentsData([]);
-    }
-  }, [selectedArtist?.id, currentScreen]);
+    // Clear comments whenever the selected artist ID changes
+    // This ensures comments from one artist don't show for another
+    setCommentsData([]);
+  }, [selectedArtist?.id]);
 
   // Track session end when page unloads
   useEffect(() => {
@@ -1420,7 +1413,11 @@ export default function App() {
       <nav className="bottom-nav">
         <button 
           className={currentScreen === 'profile' ? 'active' : ''}
-          onClick={() => setCurrentScreen('profile')}
+          onClick={() => {
+            setCurrentScreen('profile');
+            // Clear comments when navigating away from leaderboard
+            setCommentsData([]);
+          }}
         >
           <Users size={24} />
           <span>Fans</span>
@@ -1716,7 +1713,11 @@ export default function App() {
       <nav className="bottom-nav">
         <button 
           className={currentScreen === 'profile' ? 'active' : ''}
-          onClick={() => setCurrentScreen('profile')}
+          onClick={() => {
+            setCurrentScreen('profile');
+            // Clear comments when navigating away from leaderboard
+            setCommentsData([]);
+          }}
         >
           <Users size={24} />
           <span>Fans</span>
