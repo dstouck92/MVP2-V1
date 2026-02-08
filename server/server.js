@@ -297,8 +297,17 @@ const syncUserSpotifyData = async (userId, accessToken, refreshToken) => {
           console.error(`❌ User ${userId}: Failed to refresh token:`, refreshErr.response?.data || refreshErr.message);
           return { success: false, synced: 0, error: 'Token refresh failed' };
         }
+      } else if (err.response?.status === 429) {
+        // Rate limit error - log and return graceful error
+        const retryAfter = err.response.headers['retry-after'] || 60;
+        console.error(`⚠️ User ${userId}: Rate limit hit. Retry after ${retryAfter} seconds`);
+        return { 
+          success: false, 
+          synced: 0, 
+          error: `Rate limit exceeded. Please try again in ${retryAfter} seconds.` 
+        };
       } else {
-        // Other errors (429 rate limit, 403 forbidden, etc.)
+        // Other errors (403 forbidden, etc.)
         throw err;
       }
     }
