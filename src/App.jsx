@@ -382,6 +382,20 @@ export default function App() {
     }
   }, [timeFilter, currentUser, currentScreen]);
 
+  // Clear comments when selected artist changes
+  useEffect(() => {
+    // Clear comments when artist changes (but not on initial mount)
+    if (selectedArtist?.id) {
+      // Only clear if we're on the leaderboard screen
+      if (currentScreen === 'leaderboard') {
+        setCommentsData([]);
+      }
+    } else {
+      // If no artist selected, clear comments
+      setCommentsData([]);
+    }
+  }, [selectedArtist?.id, currentScreen]);
+
   // Track session end when page unloads
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -1355,6 +1369,8 @@ export default function App() {
                 <div 
                   key={artist.artistId} 
                   onClick={() => {
+                    // Clear comments immediately when navigating to a new artist
+                    setCommentsData([]);
                     setCurrentScreen('leaderboard');
                     handleArtistSelect({ id: artist.artistId, name: artist.artistName });
                   }}
