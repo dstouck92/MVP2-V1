@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Music, Users, Clock, Send, ChevronDown } from 'lucide-react';
+import { Search, Music, Users, Clock, Send, ChevronDown, Heart } from 'lucide-react';
 import './App.css';
 import { auth, users, listeningData, leaderboards, comments, analytics } from './lib/supabase';
 
@@ -1599,11 +1599,57 @@ export default function App() {
                     </div>
                   </div>
                   <div style={{ marginLeft: '2.5rem' }}>{comment.text}</div>
-                  {comment.likes && comment.likes.length > 0 && (
-                    <div style={{ marginLeft: '2.5rem', marginTop: '0.5rem', fontSize: '0.875rem', color: '#6B7280' }}>
-                      {comment.likes.length} like{comment.likes.length !== 1 ? 's' : ''}
-                    </div>
-                  )}
+                  <div style={{ 
+                    marginLeft: '2.5rem', 
+                    marginTop: '0.5rem', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.5rem' 
+                  }}>
+                    <button
+                      onClick={() => handleLikeComment(comment.id)}
+                      disabled={loading || !currentUser?.id}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: currentUser?.id ? 'pointer' : 'default',
+                        padding: '0.25rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        color: comment.likes && Array.isArray(comment.likes) && comment.likes.includes(currentUser?.id) 
+                          ? '#EF4444' 
+                          : '#6B7280',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (currentUser?.id) {
+                          e.currentTarget.style.transform = 'scale(1.1)';
+                          e.currentTarget.style.color = '#EF4444';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (currentUser?.id) {
+                          e.currentTarget.style.transform = 'scale(1)';
+                          e.currentTarget.style.color = 
+                            comment.likes && Array.isArray(comment.likes) && comment.likes.includes(currentUser?.id)
+                              ? '#EF4444'
+                              : '#6B7280';
+                        }
+                      }}
+                    >
+                      <Heart 
+                        size={18} 
+                        fill={comment.likes && Array.isArray(comment.likes) && comment.likes.includes(currentUser?.id) 
+                          ? '#EF4444' 
+                          : 'none'} 
+                      />
+                    </button>
+                    {comment.likes && Array.isArray(comment.likes) && comment.likes.length > 0 && (
+                      <span style={{ fontSize: '0.875rem', color: '#6B7280' }}>
+                        {comment.likes.length} like{comment.likes.length !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
