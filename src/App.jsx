@@ -710,6 +710,11 @@ export default function App() {
       
       // Update selected artist if name provided
       if (artistName) {
+        // Clear comments if switching to a different artist
+        const previousArtistId = selectedArtist?.id;
+        if (previousArtistId && previousArtistId !== artistId) {
+          setCommentsData([]);
+        }
         setSelectedArtist({ id: artistId, name: artistName });
         // Load comments when artist is set
         setTimeout(() => loadComments(), 100);
@@ -770,6 +775,8 @@ export default function App() {
   };
 
   const handleArtistSelect = (artist) => {
+    // Clear comments immediately when switching artists
+    setCommentsData([]);
     setSelectedArtist(artist);
     setSearchQuery(artist.name);
     setShowArtistSearchResults(false);
