@@ -321,15 +321,42 @@ const syncUserSpotifyData = async (userId, accessToken, refreshToken) => {
     
     console.log(`📊 User ${userId}: Found ${tracks.length} recent tracks from Spotify`);
 
-    const listeningEvents = tracks.map(track => ({
-      user_id: userId,
-      artist_id: track.track.artists[0]?.id || 'unknown',
-      artist_name: track.track.artists[0]?.name || 'Unknown Artist',
-      track_id: track.track.id,
-      track_name: track.track.name,
-      played_at: track.played_at,
-      duration_ms: track.track.duration_ms
-    }));
+    // Create one listening event per artist for each track (supports multi-artist tracks)
+    const listeningEvents = tracks.flatMap(track => {
+      const artists = track.track.artists || [];
+      
+      // If no artists, create one event with 'unknown' artist
+      if (artists.length === 0) {
+        return [{
+          user_id: userId,
+          artist_id: 'unknown',
+          artist_name: 'Unknown Artist',
+          track_id: track.track.id,
+          track_name: track.track.name,
+          played_at: track.played_at,
+          duration_ms: track.track.duration_ms
+        }];
+      }
+      
+      // Create one event for each artist on the track
+      return artists.map(artist => ({
+        user_id: userId,
+        artist_id: artist.id || 'unknown',
+        artist_name: artist.name || 'Unknown Artist',
+        track_id: track.track.id,
+        track_name: track.track.name,
+        played_at: track.played_at,
+        duration_ms: track.track.duration_ms
+      }));
+    });
+    
+    // Log multi-artist tracks for debugging
+    const multiArtistTracks = tracks.filter(track => 
+      track.track.artists && track.track.artists.length > 1
+    );
+    if (multiArtistTracks.length > 0) {
+      console.log(`🎵 User ${userId}: Found ${multiArtistTracks.length} multi-artist track(s), creating ${listeningEvents.length - (tracks.length - multiArtistTracks.length)} total events`);
+    }
 
     // Insert into Supabase (check for duplicates)
     // The unique constraint on (user_id, artist_id, track_id, played_at) prevents duplicates
