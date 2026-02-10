@@ -243,10 +243,10 @@ export const listeningData = {
       monthAgo.setMonth(monthAgo.getMonth() - 1);
       query = query.gte('played_at', monthAgo.toISOString());
     } else if (timeRange === 'superbowl-competition') {
-      // Superbowl Competition: Monday, February 9, 2026 12:00pm CT to Thursday, February 12, 2026 12:00pm CT
+      // Superbowl Competition: Tuesday, February 10, 2026 12:00pm CT to Thursday, February 12, 2026 12:00pm CT
       // CT is UTC-6 (CST in February), so 12:00pm CT = 6:00pm UTC
       // Use .lt() for end date to exclude data exactly at 12:00pm CT on Thursday
-      const startDate = new Date('2026-02-09T18:00:00Z'); // Monday, Feb 9, 2026 12:00pm CT (6:00pm UTC)
+      const startDate = new Date('2026-02-10T18:00:00Z'); // Tuesday, Feb 10, 2026 12:00pm CT (6:00pm UTC)
       const endDate = new Date('2026-02-12T18:00:00Z'); // Thursday, Feb 12, 2026 12:00pm CT (6:00pm UTC)
       query = query.gte('played_at', startDate.toISOString()).lt('played_at', endDate.toISOString());
     }
@@ -286,10 +286,10 @@ export const listeningData = {
       monthAgo.setMonth(monthAgo.getMonth() - 1);
       query = query.gte('played_at', monthAgo.toISOString());
     } else if (timeRange === 'superbowl-competition') {
-      // Superbowl Competition: Monday, February 9, 2026 12:00pm CT to Thursday, February 12, 2026 12:00pm CT
+      // Superbowl Competition: Tuesday, February 10, 2026 12:00pm CT to Thursday, February 12, 2026 12:00pm CT
       // CT is UTC-6 (CST in February), so 12:00pm CT = 6:00pm UTC
       // Use .lt() for end date to exclude data exactly at 12:00pm CT on Thursday
-      const startDate = new Date('2026-02-09T18:00:00Z'); // Monday, Feb 9, 2026 12:00pm CT (6:00pm UTC)
+      const startDate = new Date('2026-02-10T18:00:00Z'); // Tuesday, Feb 10, 2026 12:00pm CT (6:00pm UTC)
       const endDate = new Date('2026-02-12T18:00:00Z'); // Thursday, Feb 12, 2026 12:00pm CT (6:00pm UTC)
       query = query.gte('played_at', startDate.toISOString()).lt('played_at', endDate.toISOString());
     }
@@ -374,10 +374,10 @@ export const leaderboards = {
       monthAgo.setMonth(monthAgo.getMonth() - 1);
       query = query.gte('played_at', monthAgo.toISOString());
     } else if (timeRange === 'superbowl-competition') {
-      // Superbowl Competition: Monday, February 9, 2026 12:00pm CT to Thursday, February 12, 2026 12:00pm CT
+      // Superbowl Competition: Tuesday, February 10, 2026 12:00pm CT to Thursday, February 12, 2026 12:00pm CT
       // CT is UTC-6 (CST in February), so 12:00pm CT = 6:00pm UTC
       // Use .lt() for end date to exclude data exactly at 12:00pm CT on Thursday
-      const startDate = new Date('2026-02-09T18:00:00Z'); // Monday, Feb 9, 2026 12:00pm CT (6:00pm UTC)
+      const startDate = new Date('2026-02-10T18:00:00Z'); // Tuesday, Feb 10, 2026 12:00pm CT (6:00pm UTC)
       const endDate = new Date('2026-02-12T18:00:00Z'); // Thursday, Feb 12, 2026 12:00pm CT (6:00pm UTC)
       console.log('🏈 Superbowl Competition filter applied to leaderboard:', {
         artistId,
