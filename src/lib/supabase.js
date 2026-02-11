@@ -325,6 +325,83 @@ export const listeningData = {
   }
 };
 
+// Helper to fetch all listening events for an artist with optional time range,
+// with simple pagination to avoid the default 1,000 row limit.
+const ARTIST_PAGE_SIZE = 1000;
+
+async function fetchAllArtistListeningEvents(artistId, timeRange = 'all-time') {
+  if (!supabase) return { data: null, error: 'Supabase not configured' };
+
+  const buildQuery = () => {
+    let query = supabase
+      .from('listening_data')
+      .select('user_id, duration_ms, played_at, users!inner(username, avatar)')
+      .eq('artist_id', artistId);
+
+    // Apply time filter (must match logic used elsewhere)
+    if (timeRange === 'past-week') {
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      query = query.gte('played_at', weekAgo.toISOString());
+    } else if (timeRange === 'this-month') {
+      const monthAgo = new Date();
+      monthAgo.setMonth(monthAgo.getMonth() - 1);
+      query = query.gte('played_at', monthAgo.toISOString());
+    } else if (timeRange === 'superbowl-competition') {
+      // Superbowl Competition: Tuesday, February 10, 2026 12:00pm CT to Thursday, February 12, 2026 12:00pm CT
+      // CT is UTC-6 (CST in February), so 12:00pm CT = 6:00pm UTC
+      // Use .lt() for end date to exclude data exactly at 12:00pm CT on Thursday
+      const startDate = new Date('2026-02-10T18:00:00Z'); // Tuesday, Feb 10, 2026 12:00pm CT (6:00pm UTC)
+      const endDate = new Date('2026-02-12T18:00:00Z'); // Thursday, Feb 12, 2026 12:00pm CT (6:00pm UTC)
+      if (typeof console !== 'undefined') {
+        console.log('🏈 Superbowl Competition filter applied to leaderboard (paginated):', {
+          artistId,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          startCT: new Date(startDate.getTime()).toLocaleString('en-US', { timeZone: 'America/Chicago' }),
+          endCT: new Date(endDate.getTime()).toLocaleString('en-US', { timeZone: 'America/Chicago' })
+        });
+      }
+      query = query
+        .gte('played_at', startDate.toISOString())
+        .lt('played_at', endDate.toISOString());
+    }
+
+    return query;
+  };
+
+  let allData = [];
+  let from = 0;
+
+  while (true) {
+    const to = from + ARTIST_PAGE_SIZE - 1;
+    const { data, error } = await buildQuery().range(from, to);
+    if (error) return { data: null, error };
+
+    if (data && data.length > 0) {
+      allData = allData.concat(data);
+    }
+
+    if (!data || data.length < ARTIST_PAGE_SIZE) {
+      break;
+    }
+
+    from += ARTIST_PAGE_SIZE;
+  }
+
+  if (timeRange === 'superbowl-competition' && allData) {
+    if (typeof console !== 'undefined') {
+      console.log('🏈 Superbowl Competition leaderboard results (paginated):', {
+        artistId,
+        totalEvents: allData.length,
+        sampleDates: allData.slice(0, 3).map(d => d.played_at)
+      });
+    }
+  }
+
+  return { data: allData, error: null };
+}
+
 // ==================== LEADERBOARDS ====================
 export const leaderboards = {
   // Search for artists by name
@@ -357,48 +434,7 @@ export const leaderboards = {
 
   // Get top listeners for an artist
   getArtistLeaderboard: async (artistId, timeRange = 'all-time', limit = 10) => {
-    if (!supabase) return { error: 'Supabase not configured' };
-    
-    let query = supabase
-      .from('listening_data')
-      .select('user_id, duration_ms, played_at, users!inner(username, avatar)')
-      .eq('artist_id', artistId);
-
-    // Apply time filter
-    if (timeRange === 'past-week') {
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      query = query.gte('played_at', weekAgo.toISOString());
-    } else if (timeRange === 'this-month') {
-      const monthAgo = new Date();
-      monthAgo.setMonth(monthAgo.getMonth() - 1);
-      query = query.gte('played_at', monthAgo.toISOString());
-    } else if (timeRange === 'superbowl-competition') {
-      // Superbowl Competition: Tuesday, February 10, 2026 12:00pm CT to Thursday, February 12, 2026 12:00pm CT
-      // CT is UTC-6 (CST in February), so 12:00pm CT = 6:00pm UTC
-      // Use .lt() for end date to exclude data exactly at 12:00pm CT on Thursday
-      const startDate = new Date('2026-02-10T18:00:00Z'); // Tuesday, Feb 10, 2026 12:00pm CT (6:00pm UTC)
-      const endDate = new Date('2026-02-12T18:00:00Z'); // Thursday, Feb 12, 2026 12:00pm CT (6:00pm UTC)
-      console.log('🏈 Superbowl Competition filter applied to leaderboard:', {
-        artistId,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
-        startCT: new Date(startDate.getTime()).toLocaleString('en-US', { timeZone: 'America/Chicago' }),
-        endCT: new Date(endDate.getTime()).toLocaleString('en-US', { timeZone: 'America/Chicago' })
-      });
-      query = query.gte('played_at', startDate.toISOString()).lt('played_at', endDate.toISOString());
-    }
-
-    const { data, error } = await query;
-    
-    if (timeRange === 'superbowl-competition' && data) {
-      console.log('🏈 Superbowl Competition leaderboard results:', {
-        artistId,
-        totalEvents: data.length,
-        sampleDates: data.slice(0, 3).map(d => d.played_at)
-      });
-    }
-
+    const { data, error } = await fetchAllArtistListeningEvents(artistId, timeRange);
     if (error) return { data: null, error };
 
     // Group by user and calculate totals
