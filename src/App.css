@@ -810,6 +810,192 @@
   }
 }
 
+/* ==================== THEME TOGGLE ==================== */
+.theme-toggle-row {
+  margin-bottom: 2rem;
+  display: flex;
+  justify-content: center;
+}
+
+.theme-toggle-btn {
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid #E5E7EB;
+  padding: 0.75rem 1.5rem;
+  border-radius: 50px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1F2937;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.theme-toggle-btn:hover {
+  border-color: #10B981;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
+/* ==================== DARK MODE ==================== */
+.herd-app.dark-mode .theme-toggle-btn {
+  background: #1a1a1a;
+  border-color: #374151;
+  color: white;
+}
+
+.herd-app.dark-mode .theme-toggle-btn:hover {
+  border-color: #10B981;
+  background: #262626;
+}
+
+.herd-app.dark-mode .app-header {
+  background: #1a1a1a;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.herd-app.dark-mode .logo-text {
+  color: white;
+}
+
+.herd-app.dark-mode .search-bar {
+  background: #262626;
+}
+
+.herd-app.dark-mode .search-bar input {
+  color: white;
+}
+
+.herd-app.dark-mode .search-bar input::placeholder {
+  color: #9CA3AF;
+}
+
+.herd-app.dark-mode .search-bar svg {
+  color: #9CA3AF;
+}
+
+.herd-app.dark-mode .profile-card {
+  background: #1a1a1a;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.herd-app.dark-mode .profile-name {
+  color: white;
+}
+
+.herd-app.dark-mode .profile-since {
+  color: #D1D5DB;
+}
+
+.herd-app.dark-mode .avatar-picker {
+  background: #1a1a1a;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.herd-app.dark-mode .avatar-option:hover {
+  background: #262626;
+}
+
+.herd-app.dark-mode .avatar-option.selected {
+  border-color: #10B981;
+  background: rgba(16, 185, 129, 0.2);
+}
+
+.herd-app.dark-mode .stat-card {
+  background: #1a1a1a;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.herd-app.dark-mode .stat-label {
+  color: #D1D5DB;
+}
+
+.herd-app.dark-mode .stat-value {
+  color: white;
+}
+
+.herd-app.dark-mode .stat-sub {
+  color: #9CA3AF;
+}
+
+.herd-app.dark-mode .time-filter select {
+  background: #1a1a1a;
+  border-color: #374151;
+  color: white;
+}
+
+.herd-app.dark-mode .content-section {
+  background: #1a1a1a;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.herd-app.dark-mode .section-header h3 {
+  color: white;
+}
+
+.herd-app.dark-mode .empty-state p {
+  color: #D1D5DB;
+}
+
+.herd-app.dark-mode .empty-state span {
+  color: #9CA3AF;
+}
+
+.herd-app.dark-mode .empty-state svg {
+  opacity: 0.7;
+}
+
+.herd-app.dark-mode .artist-card {
+  background: #1a1a1a;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.herd-app.dark-mode .artist-name {
+  color: white;
+}
+
+.herd-app.dark-mode .artist-label {
+  color: #D1D5DB;
+}
+
+.herd-app.dark-mode .comments-section {
+  background: #1a1a1a;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.herd-app.dark-mode .comments-title {
+  color: white;
+}
+
+.herd-app.dark-mode .comment-sort select {
+  background: #262626;
+  color: #D1D5DB;
+}
+
+.herd-app.dark-mode .comment-input input {
+  background: #262626;
+  color: white;
+}
+
+.herd-app.dark-mode .comment-input input::placeholder {
+  color: #9CA3AF;
+}
+
+.herd-app.dark-mode .bottom-nav {
+  background: #1a1a1a;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.herd-app.dark-mode .bottom-nav button {
+  color: #9CA3AF;
+}
+
+.herd-app.dark-mode .bottom-nav button.active {
+  color: #10B981;
+}
+
+.herd-app.dark-mode .bottom-nav button:hover {
+  background: rgba(16, 185, 129, 0.1);
+}
+
 /* ==================== RESPONSIVE ==================== */
 @media (max-width: 768px) {
   .welcome-title {

@@ -42,6 +42,7 @@ export default function App() {
   const [analyticsData, setAnalyticsData] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [sessionStartTime, setSessionStartTime] = useState(null);
+  const [darkMode, setDarkMode] = useState(false);
 
   // ==================== HELPER FUNCTIONS (defined first) ====================
   const checkSession = async () => {
@@ -1242,7 +1243,7 @@ export default function App() {
           </div>
         )}
 
-        {userProfile?.spotify_access_token && (
+        {userProfile?.spotify_access_token ? (
           <div className="spotify-banner" style={{ background: '#10B981', color: 'white' }}>
             <Music size={20} />
             <span>Spotify Connected</span>
@@ -1308,7 +1309,17 @@ export default function App() {
               {loading ? 'Syncing...' : 'Sync Data'}
             </button>
           </div>
-        )}
+        ) : null}
+
+        <div className="theme-toggle-row">
+          <button
+            className="theme-toggle-btn"
+            onClick={() => setDarkMode(!darkMode)}
+            title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
+          </button>
+        </div>
 
         <div className="stats-section">
           <div className="time-filter">
@@ -1361,6 +1372,7 @@ export default function App() {
               {topArtists.map((artist, index) => (
                 <div 
                   key={artist.artistId} 
+                  className="profile-artist-item"
                   onClick={() => {
                     // Clear comments immediately when navigating to a new artist
                     setCommentsData([]);
@@ -1369,30 +1381,26 @@ export default function App() {
                   }}
                   style={{
                     padding: '1rem',
-                    background: '#F9FAFB',
+                    background: darkMode ? '#262626' : '#F9FAFB',
                     borderRadius: '12px',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    ':hover': {
-                      background: '#F3F4F6',
-                      transform: 'translateY(-2px)'
-                    }
+                    transition: 'all 0.2s'
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#F3F4F6';
+                    e.currentTarget.style.background = darkMode ? '#374151' : '#F3F4F6';
                     e.currentTarget.style.transform = 'translateY(-2px)';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#F9FAFB';
+                    e.currentTarget.style.background = darkMode ? '#262626' : '#F9FAFB';
                     e.currentTarget.style.transform = 'translateY(0)';
                   }}
                 >
                   <div>
-                    <div style={{ fontWeight: 600, color: '#1F2937' }}>#{index + 1} {artist.artistName}</div>
-                    <div style={{ fontSize: '0.875rem', color: '#6B7280' }}>
+                    <div style={{ fontWeight: 600, color: darkMode ? 'white' : '#1F2937' }}>#{index + 1} {artist.artistName}</div>
+                    <div style={{ fontSize: '0.875rem', color: darkMode ? '#D1D5DB' : '#6B7280' }}>
                       {artist.totalMinutes} minutes • {artist.totalSongs} songs
                     </div>
                   </div>
@@ -1469,8 +1477,8 @@ export default function App() {
                 top: '100%',
                 left: 0,
                 right: 0,
-                background: 'white',
-                border: '1px solid #E5E7EB',
+                background: darkMode ? '#1a1a1a' : 'white',
+                border: darkMode ? '1px solid #374151' : '1px solid #E5E7EB',
                 borderRadius: '8px',
                 marginTop: '4px',
                 maxHeight: '300px',
@@ -1485,13 +1493,13 @@ export default function App() {
                     style={{
                       padding: '12px 16px',
                       cursor: 'pointer',
-                      borderBottom: '1px solid #F3F4F6',
+                      borderBottom: darkMode ? '1px solid #374151' : '1px solid #F3F4F6',
                       transition: 'background 0.2s'
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = '#F9FAFB'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                    onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? '#262626' : '#F9FAFB'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = darkMode ? '#1a1a1a' : 'white'}
                   >
-                    <div style={{ fontWeight: 500, color: '#1F2937' }}>{artist.name}</div>
+                    <div style={{ fontWeight: 500, color: darkMode ? 'white' : '#1F2937' }}>{artist.name}</div>
                   </div>
                 ))}
               </div>
@@ -1549,7 +1557,7 @@ export default function App() {
               {leaderboardData.map((entry) => (
                 <div key={entry.userId} style={{
                   padding: '1rem',
-                  background: '#F9FAFB',
+                  background: darkMode ? '#262626' : '#F9FAFB',
                   borderRadius: '12px',
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -1561,8 +1569,8 @@ export default function App() {
                     </div>
                     <div style={{ fontSize: '2rem' }}>{entry.avatar}</div>
                     <div>
-                      <div style={{ fontWeight: 600 }}>{entry.username}</div>
-                      <div style={{ fontSize: '0.875rem', color: '#6B7280' }}>
+                      <div style={{ fontWeight: 600, color: darkMode ? 'white' : 'inherit' }}>{entry.username}</div>
+                      <div style={{ fontSize: '0.875rem', color: darkMode ? '#D1D5DB' : '#6B7280' }}>
                         {entry.totalMinutes} minutes • {entry.totalSongs} songs
                       </div>
                     </div>
@@ -1632,13 +1640,14 @@ export default function App() {
               {commentsData.map((comment) => (
                 <div key={comment.id} style={{
                   padding: '1rem',
-                  background: '#F9FAFB',
-                  borderRadius: '12px'
+                  background: darkMode ? '#262626' : '#F9FAFB',
+                  borderRadius: '12px',
+                  color: darkMode ? 'white' : 'inherit'
                 }}>
                   <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.5rem' }}>
                     <div style={{ fontSize: '1.5rem' }}>{comment.users?.avatar || '🦌'}</div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.875rem', color: darkMode ? 'white' : 'inherit' }}>
                         {comment.users?.username || 'Anonymous'}
                       </div>
                       <div style={{ fontSize: '0.75rem', color: '#9CA3AF' }}>
@@ -1735,7 +1744,7 @@ export default function App() {
 
   // ==================== MAIN RENDER ====================
   return (
-    <div className="herd-app">
+    <div className={`herd-app ${darkMode ? 'dark-mode' : ''}`} data-theme={darkMode ? 'dark' : 'light'}>
       {error && currentScreen !== 'login' && currentScreen !== 'signup' && (
         <div style={{
           position: 'fixed',
